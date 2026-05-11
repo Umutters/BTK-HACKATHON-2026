@@ -38,7 +38,7 @@ class _LoadingScreenState extends State<LoadingScreen>
     final userName = vm.userName;
     final age = vm.age;
     final goalCyberName = vm.goalCyberName;
-    
+
     _lines = [
       '> OPERATÖR KİMLİĞİ DOĞRULANDI: ${userName.toUpperCase()}.EXE',
       '> YAŞ PROFİLİ TARANIDI: $age — RİSK MODELİ HESAPLANIYOR...',
@@ -81,7 +81,7 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => const MainNavigationWrapper(),
+        pageBuilder: (_, __, ___) => const MainNavigationWrapper(),
         transitionsBuilder: (_, animation, __, child) =>
             FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 600),

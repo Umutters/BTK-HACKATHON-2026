@@ -110,7 +110,7 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
     setState(() => _selectedId = id);
   }
 
-  void _proceed() {
+  void _proceed() async {
     if (!_canProceed) return;
     final selected = _goals.firstWhere((g) => g.id == _selectedId);
     final vm = context.read<UserSetupViewModel>();
@@ -119,6 +119,8 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
       name: selected.name,
       cyberName: selected.cyberName,
     );
+    await vm.saveToLocal();
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, animation, __) => const LoadingScreen(),

@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/datasources/local_datasource.dart';
+import '../data/models/profile_model.dart';
+
 /// Para birimi seçenekleri — BudgetSetupScreen'den buraya taşındı.
 enum SetupCurrency { usd, try_ }
 
@@ -81,5 +84,22 @@ class UserSetupViewModel extends ChangeNotifier {
     _goalName = '';
     _goalCyberName = '';
     notifyListeners();
+  }
+
+  /// Onboarding verilerini SharedPreferences'a kaydeder.
+  Future<void> saveToLocal() async {
+    final profile = ProfileModel(
+      id: 'local',
+      userName: _userName,
+      age: _age,
+      gender: '',
+      initialBalance: _budgetAmount,
+      currentBalance: _budgetAmount,
+      savingsPool: 0,
+      level: 1,
+      xp: 0,
+      dailyLimit: _budgetAmount / 30,
+    );
+    await LocalDataSource().saveProfile(profile);
   }
 }

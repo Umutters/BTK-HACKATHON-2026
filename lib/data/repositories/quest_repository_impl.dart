@@ -1,9 +1,9 @@
 import '../../domain/entities/quest_entity.dart';
 import '../../domain/repositories/quest_repository.dart';
-import '../datasources/mock_local_datasource.dart';
+import '../datasources/local_datasource.dart';
 
 class QuestRepositoryImpl implements QuestRepository {
-  final MockLocalDataSource _dataSource;
+  final LocalDataSource _dataSource;
 
   const QuestRepositoryImpl(this._dataSource);
 

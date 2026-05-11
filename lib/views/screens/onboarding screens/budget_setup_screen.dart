@@ -296,10 +296,7 @@ class _WalletIcon extends StatelessWidget {
 enum _Currency { usd, try_ }
 
 extension _CurrencyExt on _Currency {
-  String get label =>
-      this == _Currency.usd ? 'USD (Amerikan\nDoları)' : 'TRY (Türk\nLirası)';
   String get symbol => this == _Currency.usd ? '\$' : '₺';
-  String get code => this == _Currency.usd ? 'USD' : 'TRY';
 }
 
 // ─── Budget card ──────────────────────────────────────────────────────────────
@@ -333,16 +330,6 @@ class _BudgetCard extends StatelessWidget {
         .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '${currency.symbol}$intPart';
-  }
-
-  String _formatFull(double v) {
-    final intPart = v
-        .toStringAsFixed(2)
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+\.)'),
           (m) => '${m[1]},',
         );
     return '${currency.symbol}$intPart';

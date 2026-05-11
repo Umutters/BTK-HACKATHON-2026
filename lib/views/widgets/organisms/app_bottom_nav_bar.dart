@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimensions.dart';
+import '../../../core/constants/app_text_styles.dart';
 
 /// Floating glass bottom nav bar with Cyber Blue top-border glow
 class AppBottomNavBar extends StatelessWidget {
@@ -13,6 +14,12 @@ class AppBottomNavBar extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
   });
+
+  static const _items = [
+    _NavItemData(icon: Icons.grid_view_rounded, label: 'ANA SAYFA'),
+    _NavItemData(icon: Icons.auto_awesome_rounded, label: 'AI SOHBET'),
+    _NavItemData(icon: Icons.show_chart_rounded, label: 'SİMÜLASYON'),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -32,26 +39,15 @@ class AppBottomNavBar extends StatelessWidget {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                index: 0,
+            children: List.generate(
+              _items.length,
+              (i) => _NavItem(
+                data: _items[i],
+                index: i,
                 currentIndex: currentIndex,
                 onTap: onTap,
               ),
-              _NavItem(
-                icon: Icons.smart_toy_rounded,
-                index: 1,
-                currentIndex: currentIndex,
-                onTap: onTap,
-              ),
-              _NavItem(
-                icon: Icons.trending_up_rounded,
-                index: 2,
-                currentIndex: currentIndex,
-                onTap: onTap,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -59,14 +55,20 @@ class AppBottomNavBar extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
+class _NavItemData {
   final IconData icon;
+  final String label;
+  const _NavItemData({required this.icon, required this.label});
+}
+
+class _NavItem extends StatelessWidget {
+  final _NavItemData data;
   final int index;
   final int currentIndex;
   final ValueChanged<int> onTap;
 
   const _NavItem({
-    required this.icon,
+    required this.data,
     required this.index,
     required this.currentIndex,
     required this.onTap,
@@ -79,32 +81,47 @@ class _NavItem extends StatelessWidget {
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 72,
+        width: 90,
         height: AppDimensions.bottomNavHeight,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              icon,
+              data.icon,
               color: isSelected ? AppColors.neonLime : AppColors.cyberBlue,
               size: AppDimensions.navIconSize,
             ),
-            if (isSelected)
-              const SizedBox(
-                width: 6,
-                height: 6,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.neonLime,
-                    boxShadow: [
-                      BoxShadow(color: AppColors.neonLime50, blurRadius: 6),
-                    ],
-                  ),
+            const SizedBox(height: 3),
+            if (isSelected) ...[
+              Text(
+                data.label,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.neonLime,
+                  fontSize: 9,
+                  letterSpacing: 0.8,
                 ),
-              )
-            else
-              const SizedBox(height: 6),
+              ),
+              const SizedBox(height: 3),
+              Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.neonLime,
+                  boxShadow: [
+                    BoxShadow(color: AppColors.neonLime50, blurRadius: 6),
+                  ],
+                ),
+              ),
+            ] else
+              Text(
+                data.label,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.outline,
+                  fontSize: 9,
+                  letterSpacing: 0.8,
+                ),
+              ),
           ],
         ),
       ),

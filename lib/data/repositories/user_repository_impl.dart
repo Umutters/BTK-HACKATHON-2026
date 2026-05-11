@@ -1,9 +1,9 @@
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/user_repository.dart';
-import '../datasources/mock_local_datasource.dart';
+import '../datasources/local_datasource.dart';
 
 class UserRepositoryImpl implements UserRepository {
-  final MockLocalDataSource _dataSource;
+  final LocalDataSource _dataSource;
 
   const UserRepositoryImpl(this._dataSource);
 

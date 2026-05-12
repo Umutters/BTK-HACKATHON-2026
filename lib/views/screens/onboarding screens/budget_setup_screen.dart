@@ -87,8 +87,8 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
     vm.setBudgetAmount(_amount);
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => const GoalSetupScreen(),
-        transitionsBuilder: (_, animation, __, child) =>
+        pageBuilder: (_, animation, _) => const GoalSetupScreen(),
+        transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 400),
       ),

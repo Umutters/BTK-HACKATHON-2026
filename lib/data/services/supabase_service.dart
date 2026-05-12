@@ -27,9 +27,13 @@ class SupabaseService {
 
   // ─── Profiles ────────────────────────────────────────────────────────────────
 
+  /// Yeni profil satırı oluşturur (onboarding sonu).
+  Future<void> insertProfile(ProfileModel profile) =>
+      _client.from('users').insert(profile.toJson());
+
   Future<ProfileModel?> getProfile(String userId) async {
     final data = await _client
-        .from('profiles')
+        .from('users')
         .select()
         .eq('id', userId)
         .maybeSingle();
@@ -38,7 +42,7 @@ class SupabaseService {
   }
 
   Future<void> updateProfile(String userId, Map<String, dynamic> updates) =>
-      _client.from('profiles').update(updates).eq('id', userId);
+      _client.from('users').update(updates).eq('id', userId);
 
   Future<void> updateXp(String userId, int xp) =>
       updateProfile(userId, {'Xp': xp});

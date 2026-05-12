@@ -81,8 +81,8 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const MainNavigationWrapper(),
-        transitionsBuilder: (_, animation, __, child) =>
+        pageBuilder: (_, _, _) => const MainNavigationWrapper(),
+        transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 600),
       ),
@@ -306,7 +306,7 @@ class _ActiveLogLine extends StatelessWidget {
         // Blinking cursor
         AnimatedBuilder(
           animation: glowCtrl,
-          builder: (_, __) => Opacity(
+          builder: (_, _) => Opacity(
             opacity: glowCtrl.value,
             child: Container(
               width: 8,
@@ -352,7 +352,7 @@ class _ProgressSection extends StatelessWidget {
             ),
             AnimatedBuilder(
               animation: controller,
-              builder: (_, __) => Text(
+              builder: (_, _) => Text(
                 '${(controller.value * 100).round()}%',
                 style: const TextStyle(
                   fontFamily: 'SpaceGrotesk',
@@ -367,7 +367,7 @@ class _ProgressSection extends StatelessWidget {
         const SizedBox(height: AppDimensions.spaceXS),
         AnimatedBuilder(
           animation: controller,
-          builder: (_, __) => ClipRRect(
+          builder: (_, _) => ClipRRect(
             borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
             child: SizedBox(
               height: 4,

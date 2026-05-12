@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, vm, _) {
         return Scaffold(
           backgroundColor: AppColors.background,
-          appBar: _AppBar(level: vm.user?.level),
+          appBar: _AppBar(level: vm.user?.level, name: vm.user?.name),
           body: switch (vm.state) {
             HomeViewState.initial ||
             HomeViewState.loading => const _LoadingView(),
@@ -50,8 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _AppBar extends StatelessWidget implements PreferredSizeWidget {
   final int? level;
+  final String? name;
 
-  const _AppBar({this.level});
+  const _AppBar({this.level, this.name});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -84,7 +85,10 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ),
-      title: Text('FortuneFlow AI', style: AppTextStyles.appBarTitle),
+      title: Text(
+        name != null ? 'Merhaba, $name' : 'FortuneFlow AI',
+        style: AppTextStyles.appBarTitle,
+      ),
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: AppDimensions.spaceXL),

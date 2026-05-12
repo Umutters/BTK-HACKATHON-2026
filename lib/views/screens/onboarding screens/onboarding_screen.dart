@@ -33,8 +33,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _finish() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => const UserSetupScreen(),
-        transitionsBuilder: (_, animation, __, child) =>
+        pageBuilder: (_, animation, _) => const UserSetupScreen(),
+        transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 400),
       ),

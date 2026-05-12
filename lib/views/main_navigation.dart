@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/datasources/local_datasource.dart';
 import '../data/repositories/quest_repository_impl.dart';
 import '../data/repositories/user_repository_impl.dart';
+import '../domain/usecases/complete_quest_usecase.dart';
 import '../domain/usecases/get_daily_quests_usecase.dart';
 import '../domain/usecases/get_user_progress_usecase.dart';
 import '../domain/usecases/start_quest_usecase.dart';
@@ -13,7 +15,9 @@ import '../viewmodels/simulation_viewmodel.dart';
 import 'screens/ai_oracle_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/simulation_screen.dart';
+import 'screens/settings_screen.dart';
 import 'widgets/organisms/app_bottom_nav_bar.dart';
+import 'widgets/organisms/quick_expense_sheet.dart';
 
 class MainNavigation extends StatelessWidget {
   const MainNavigation({super.key});
@@ -32,6 +36,7 @@ class MainNavigation extends StatelessWidget {
             getUserProgressUseCase: GetUserProgressUseCase(userRepo),
             getDailyQuestsUseCase: GetDailyQuestsUseCase(questRepo),
             startQuestUseCase: StartQuestUseCase(questRepo),
+            completeQuestUseCase: CompleteQuestUseCase(questRepo),
           ),
         ),
         ChangeNotifierProvider(create: (_) => SimulationViewModel()),
@@ -44,10 +49,23 @@ class MainNavigation extends StatelessWidget {
 class _NavigationShell extends StatelessWidget {
   const _NavigationShell();
 
+  Future<void> _showTransactionSheet(BuildContext context) async {
+    HapticFeedback.mediumImpact();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (_) => const QuickExpenseSheet(),
+    );
+  }
+
   static const List<Widget> _screens = [
     HomeScreen(),
     AiOracleScreen(),
     SimulationScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -55,7 +73,32 @@ class _NavigationShell extends StatelessWidget {
     return Consumer<NavigationViewModel>(
       builder: (context, vm, _) {
         return Scaffold(
+          extendBody: true,
           body: IndexedStack(index: vm.currentIndex, children: _screens),
+          floatingActionButton: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66DEFF9A),
+                  blurRadius: 22,
+                  spreadRadius: 2,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              onPressed: () => _showTransactionSheet(context),
+              backgroundColor: const Color(0xFFDEFF9A),
+              elevation: 10,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(Icons.add, color: Colors.black, size: 30),
+            ),
+          ),
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerDocked,
           bottomNavigationBar: AppBottomNavBar(
             currentIndex: vm.currentIndex,
             onTap: vm.setIndex,

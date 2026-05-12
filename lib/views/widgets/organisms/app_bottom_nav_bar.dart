@@ -19,6 +19,7 @@ class AppBottomNavBar extends StatelessWidget {
     _NavItemData(icon: Icons.grid_view_rounded, label: 'ANA SAYFA'),
     _NavItemData(icon: Icons.auto_awesome_rounded, label: 'AI SOHBET'),
     _NavItemData(icon: Icons.show_chart_rounded, label: 'SİMÜLASYON'),
+    _NavItemData(icon: Icons.settings_rounded, label: 'AYARLAR'),
   ];
 
   @override
@@ -38,16 +39,41 @@ class AppBottomNavBar extends StatelessWidget {
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(
-              _items.length,
-              (i) => _NavItem(
-                data: _items[i],
-                index: i,
-                currentIndex: currentIndex,
-                onTap: onTap,
+            children: [
+              Expanded(
+                child: _NavItem(
+                  data: _items[0],
+                  index: 0,
+                  currentIndex: currentIndex,
+                  onTap: onTap,
+                ),
               ),
-            ),
+              Expanded(
+                child: _NavItem(
+                  data: _items[1],
+                  index: 1,
+                  currentIndex: currentIndex,
+                  onTap: onTap,
+                ),
+              ),
+              const SizedBox(width: 84),
+              Expanded(
+                child: _NavItem(
+                  data: _items[2],
+                  index: 2,
+                  currentIndex: currentIndex,
+                  onTap: onTap,
+                ),
+              ),
+              Expanded(
+                child: _NavItem(
+                  data: _items[3],
+                  index: 3,
+                  currentIndex: currentIndex,
+                  onTap: onTap,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -81,7 +107,6 @@ class _NavItem extends StatelessWidget {
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 90,
         height: AppDimensions.bottomNavHeight,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

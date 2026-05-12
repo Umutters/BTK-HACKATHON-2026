@@ -9,6 +9,7 @@ import 'core/theme/app_theme.dart';
 import 'data/datasources/local_datasource.dart';
 import 'data/services/supabase_service.dart';
 import 'viewmodels/user_setup_viewmodel.dart';
+import 'views/main_navigation.dart';
 import 'views/screens/onboarding screens/onboarding_screen.dart';
 
 Future<void> main() async {
@@ -27,11 +28,38 @@ Future<void> main() async {
     await SupabaseService.instance.ensureSignedIn();
   }
 
-  runApp(const FortuneFlowApp());
+  final bool onboardingDone = await _checkOnboardingDone();
+
+  runApp(FortuneFlowApp(onboardingDone: onboardingDone));
+}
+
+/// Supabase'de profil varsa true döner, yoksa local'e bakar.
+Future<bool> _checkOnboardingDone() async {
+  final supabase = SupabaseService.instance;
+  final userId = supabase.currentUserId;
+
+  if (userId != null) {
+    try {
+      final profile = await supabase.getProfile(userId);
+      if (profile != null) {
+        // Supabase'den çekilen profili local cache'e yaz
+        await LocalDataSource().saveProfile(profile);
+        return true;
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('Supabase getProfile hatası: $e');
+      // Supabase erişilemiyorsa local'e bak
+    }
+  }
+
+  return LocalDataSource().hasProfile();
 }
 
 class FortuneFlowApp extends StatelessWidget {
-  const FortuneFlowApp({super.key});
+  final bool onboardingDone;
+
+  const FortuneFlowApp({super.key, required this.onboardingDone});
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +69,9 @@ class FortuneFlowApp extends StatelessWidget {
         title: 'FortuneFlow AI',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
-        home: const OnboardingScreen(),
+        home: onboardingDone
+            ? const MainNavigation()
+            : const OnboardingScreen(),
       ),
     );
   }

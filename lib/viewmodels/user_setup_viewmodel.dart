@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/datasources/local_datasource.dart';
 import '../data/models/profile_model.dart';
+import '../data/services/supabase_service.dart';
 
 /// Para birimi seçenekleri — BudgetSetupScreen'den buraya taşındı.
 enum SetupCurrency { usd, try_ }
@@ -86,10 +87,13 @@ class UserSetupViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Onboarding verilerini SharedPreferences'a kaydeder.
+  /// Onboarding verilerini hem SharedPreferences'a hem Supabase'e kaydeder.
   Future<void> saveToLocal() async {
+    final supabase = SupabaseService.instance;
+    final userId = supabase.currentUserId ?? 'local';
+
     final profile = ProfileModel(
-      id: 'local',
+      id: userId,
       userName: _userName,
       age: _age,
       gender: '',
@@ -100,6 +104,18 @@ class UserSetupViewModel extends ChangeNotifier {
       xp: 0,
       dailyLimit: _budgetAmount / 30,
     );
+
+    // Her zaman locale kaydet (offline fallback)
     await LocalDataSource().saveProfile(profile);
+
+    // Supabase'e insert et (signed-in kullanıcı varsa)
+    if (userId != 'local') {
+      try {
+        await supabase.insertProfile(profile);
+      } catch (e) {
+        // Supabase hatası varsa local kayıt yeterli
+        debugPrint('Supabase insertProfile hatası: $e');
+      }
+    }
   }
 }

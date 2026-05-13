@@ -26,4 +26,5 @@ class RecurringTransactionModel {
 
   bool get isIncome => type.toLowerCase() == 'income';
   bool get isExpense => type.toLowerCase() == 'expense';
+  bool get isSaving => type.toLowerCase() == 'saving';
 }

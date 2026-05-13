@@ -19,12 +19,12 @@ class QuestModel {
 
   factory QuestModel.fromJson(Map<String, dynamic> json) {
     return QuestModel(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      xpReward: json['xpReward'] as int,
-      status: json['status'] as String,
-      iconName: json['iconName'] as String,
+      id: (json['id'] ?? '').toString(),
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      xpReward: ((json['xpReward'] ?? json['xp_reward']) as num?)?.toInt() ?? 0,
+      status: json['status'] as String? ?? 'notStarted',
+      iconName: (json['iconName'] ?? json['icon_name']) as String? ?? '',
     );
   }
 
@@ -32,9 +32,9 @@ class QuestModel {
     'id': id,
     'title': title,
     'description': description,
-    'xpReward': xpReward,
+    'xp_reward': xpReward,
     'status': status,
-    'iconName': iconName,
+    'icon_name': iconName,
   };
 
   QuestEntity toEntity() => QuestEntity(

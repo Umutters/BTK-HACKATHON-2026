@@ -4,7 +4,6 @@ import '../data/datasources/local_datasource.dart';
 import '../data/models/profile_model.dart';
 import '../data/services/supabase_service.dart';
 
-/// Para birimi seçenekleri — BudgetSetupScreen'den buraya taşındı.
 enum SetupCurrency { usd, try_ }
 
 /// Onboarding setup akışındaki (UserSetup → Age → Budget → Goal) tüm
@@ -106,7 +105,9 @@ class UserSetupViewModel extends ChangeNotifier {
     );
 
     // Her zaman locale kaydet (offline fallback)
-    await LocalDataSource().saveProfile(profile);
+    final local = LocalDataSource();
+    await local.saveProfile(profile);
+    await local.setOnboardingDone(true);
 
     // Supabase'e insert et (signed-in kullanıcı varsa)
     if (userId != 'local') {

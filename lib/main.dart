@@ -35,25 +35,56 @@ Future<void> main() async {
 
 /// Supabase'de profil varsa true döner, yoksa local'e bakar.
 Future<bool> _checkOnboardingDone() async {
+  final localDataSource = LocalDataSource();
+  if (await localDataSource.isOnboardingDone()) {
+    return true;
+  }
+
   final supabase = SupabaseService.instance;
   final userId = supabase.currentUserId;
 
   if (userId != null) {
-    try {
-      final profile = await supabase.getProfile(userId);
-      if (profile != null) {
-        // Supabase'den çekilen profili local cache'e yaz
-        await LocalDataSource().saveProfile(profile);
-        return true;
+    const maxAttempts = 2;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final profile = await supabase.getProfile(userId);
+        if (profile != null) {
+          // Supabase'den çekilen profili local cache'e yaz
+          await localDataSource.saveProfile(profile);
+          await localDataSource.setOnboardingDone(true);
+          return true;
+        }
+        break;
+      } catch (e) {
+        final isRetryable = _isTransientNetworkError(e);
+        final canRetry = isRetryable && attempt < maxAttempts;
+
+        // ignore: avoid_print
+        print('Supabase getProfile deneme $attempt hatası: $e');
+
+        if (canRetry) {
+          await Future<void>.delayed(const Duration(milliseconds: 700));
+          continue;
+        }
+        break;
       }
-    } catch (e) {
-      // ignore: avoid_print
-      print('Supabase getProfile hatası: $e');
-      // Supabase erişilemiyorsa local'e bak
     }
   }
 
-  return LocalDataSource().hasProfile();
+  final hasProfile = await localDataSource.hasProfile();
+  if (hasProfile) {
+    await localDataSource.setOnboardingDone(true);
+    return true;
+  }
+
+  return false;
+}
+
+bool _isTransientNetworkError(Object error) {
+  final message = error.toString().toLowerCase();
+  return message.contains('failed host lookup') ||
+      message.contains('socketexception') ||
+      message.contains('connection closed');
 }
 
 class FortuneFlowApp extends StatelessWidget {

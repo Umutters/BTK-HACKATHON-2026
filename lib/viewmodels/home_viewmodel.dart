@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/quest_entity.dart';
@@ -6,6 +8,9 @@ import '../../domain/usecases/complete_quest_usecase.dart';
 import '../../domain/usecases/get_daily_quests_usecase.dart';
 import '../../domain/usecases/get_user_progress_usecase.dart';
 import '../../domain/usecases/start_quest_usecase.dart';
+import '../data/datasources/local_datasource.dart';
+import '../data/models/daily_log_model.dart';
+import '../data/models/recurring_transaction_model.dart';
 import '../data/services/supabase_service.dart';
 
 enum HomeViewState { initial, loading, loaded, error }
@@ -18,11 +23,20 @@ class HomeViewModel extends ChangeNotifier {
 
   HomeViewState _state = HomeViewState.initial;
   UserEntity? _user;
+  double _currentBalance = 0;
+  double _savingsPool = 0;
+  List<RecurringTransactionModel> _transactions = [];
   List<QuestEntity> _quests = [];
   String? _errorMessage;
 
   HomeViewState get state => _state;
   UserEntity? get user => _user;
+  double get currentBalance => _currentBalance;
+  double get savingsPool => _savingsPool;
+  List<RecurringTransactionModel> get allTransactions =>
+      List.unmodifiable(_transactions);
+  List<RecurringTransactionModel> get recentTransactions =>
+      _transactions.take(5).toList(growable: false);
   List<QuestEntity> get quests => _quests;
   String? get errorMessage => _errorMessage;
 
@@ -49,10 +63,24 @@ class HomeViewModel extends ChangeNotifier {
       final results = await Future.wait([
         _getUserProgressUseCase(),
         _getDailyQuestsUseCase(),
+        LocalDataSource().getRecurringTransactions(),
       ]);
 
       _user = results[0] as UserEntity;
       _quests = results[1] as List<QuestEntity>;
+      _setTransactions(results[2] as List<RecurringTransactionModel>);
+
+      final userId = SupabaseService.instance.currentUserId;
+      final profile = userId == null
+          ? null
+          : await SupabaseService.instance.getProfile(userId);
+      if (profile != null) {
+        _currentBalance = profile.currentBalance;
+        _savingsPool = profile.savingsPool;
+      } else {
+        _currentBalance = 0;
+        _savingsPool = 0;
+      }
       _state = HomeViewState.loaded;
     } catch (e) {
       _errorMessage = e.toString();
@@ -78,9 +106,93 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
+  void applyTransactionDelta(double delta) {
+    _currentBalance = (_currentBalance + delta)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    notifyListeners();
+    unawaited(refreshTransactions());
+  }
+
+  Future<void> processSavingsTransfer(double transferredAmount) async {
+    if (transferredAmount <= 0) return;
+
+    QuestEntity? q2;
+    for (final quest in _quests) {
+      if (quest.id == 'q2') {
+        q2 = quest;
+        break;
+      }
+    }
+
+    if (q2 == null || q2.status == QuestStatus.completed) {
+      return;
+    }
+
+    final todayTransferred = await _getTodayTransferredToSavings();
+    if (todayTransferred >= 50) {
+      await completeQuest('q2');
+    }
+  }
+
+  Future<double> _getTodayTransferredToSavings() async {
+    final userId = SupabaseService.instance.currentUserId;
+    final today = DateTime.now();
+    List<DailyLogModel> logs;
+    if (userId != null) {
+      try {
+        logs = await SupabaseService.instance.getRecentDailyLogs(
+          userId,
+          days: 1,
+        );
+      } catch (_) {
+        logs = await LocalDataSource().getRecentDailyLogs(days: 1);
+      }
+    } else {
+      logs = await LocalDataSource().getRecentDailyLogs(days: 1);
+    }
+
+    return logs
+        .where(
+          (l) =>
+              l.date.year == today.year &&
+              l.date.month == today.month &&
+              l.date.day == today.day,
+        )
+        .fold<double>(0, (sum, l) => sum + l.transferredToSavings);
+  }
+
+  Future<void> refreshTransactions() async {
+    final txns = await LocalDataSource().getRecurringTransactions();
+    _setTransactions(txns);
+    notifyListeners();
+  }
+
+  void _setTransactions(List<RecurringTransactionModel> source) {
+    final userId = _user?.id;
+    var filtered = source;
+    if (userId != null && userId.isNotEmpty) {
+      final scoped = source.where((t) => t.userId == userId).toList();
+      if (scoped.isNotEmpty) {
+        filtered = scoped;
+      }
+    }
+
+    filtered.sort((a, b) {
+      final bKey = int.tryParse(b.id) ?? 0;
+      final aKey = int.tryParse(a.id) ?? 0;
+      return bKey.compareTo(aKey);
+    });
+    _transactions = filtered;
+  }
+
   Future<void> completeQuest(String questId) async {
     try {
       final quest = _quests.firstWhere((q) => q.id == questId);
+      if (quest.status == QuestStatus.completed) {
+        return;
+      }
+
       await _completeQuestUseCase(questId);
 
       // Lokal UI güncellemesi
@@ -91,20 +203,33 @@ class HomeViewModel extends ChangeNotifier {
 
       // XP güncelleme
       if (_user != null) {
-        final newXp = _user!.currentXp + quest.xpReward;
+        final gainedXp = _user!.currentXp + quest.xpReward;
+        var nextLevel = _user!.level;
+        var nextXp = gainedXp;
+        var nextMaxXp = _user!.maxXp;
+
+        if (gainedXp >= _user!.maxXp) {
+          nextLevel = _user!.level + 1;
+          nextXp = 0;
+          nextMaxXp = nextLevel * 1000;
+        }
+
         _user = UserEntity(
           id: _user!.id,
           name: _user!.name,
-          level: _user!.level,
-          currentXp: newXp,
-          maxXp: _user!.maxXp,
+          level: nextLevel,
+          currentXp: nextXp,
+          maxXp: nextMaxXp,
         );
 
         // Supabase'e yaz
         final userId = SupabaseService.instance.currentUserId;
         if (userId != null) {
           try {
-            await SupabaseService.instance.updateXp(userId, newXp);
+            await SupabaseService.instance.updateProfile(userId, {
+              'xp': nextXp,
+              'level': nextLevel,
+            });
           } catch (e) {
             debugPrint('XP Supabase güncellemesi başarısız: $e');
           }

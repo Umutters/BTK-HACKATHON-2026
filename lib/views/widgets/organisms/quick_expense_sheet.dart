@@ -10,6 +10,17 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../data/datasources/local_datasource.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/recurring_transaction_model.dart';
+import '../../../data/services/supabase_service.dart';
+
+class QuickTransactionResult {
+  final double balanceDelta;
+  final double transferredToSavings;
+
+  const QuickTransactionResult({
+    required this.balanceDelta,
+    required this.transferredToSavings,
+  });
+}
 
 class QuickExpenseSheet extends StatefulWidget {
   const QuickExpenseSheet({super.key});
@@ -19,18 +30,37 @@ class QuickExpenseSheet extends StatefulWidget {
 }
 
 class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
-  static const _categories = [
+  static const _expenseCategories = [
     _CategoryData('Kahve', Icons.local_cafe_rounded),
     _CategoryData('Yemek', Icons.fastfood_rounded),
     _CategoryData('Ulaşım', Icons.directions_car_rounded),
     _CategoryData('Eğlence', Icons.sports_esports_rounded),
   ];
 
+  static const _incomeCategories = [
+    _CategoryData('Maaş', Icons.account_balance_rounded),
+    _CategoryData('Freelance', Icons.laptop_mac_rounded),
+    _CategoryData('Prim', Icons.workspace_premium_rounded),
+    _CategoryData('Satış', Icons.storefront_rounded),
+  ];
+
+  static const _savingsCategories = [
+    _CategoryData('Birikim Transferi', Icons.savings_rounded),
+    _CategoryData('Acil Fon', Icons.shield_rounded),
+  ];
+
   String _amountDigits = '0';
+  _EntryType _entryType = _EntryType.expense;
   int _selectedCategoryIndex = 0;
   ProfileModel? _profile;
   bool _isSaving = false;
   bool _isScanning = false;
+
+  List<_CategoryData> get _categories => _entryType == _EntryType.expense
+      ? _expenseCategories
+      : _entryType == _EntryType.income
+      ? _incomeCategories
+      : _savingsCategories;
 
   @override
   void initState() {
@@ -56,10 +86,28 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
       return 'Tutar girince 2045 hedefine etkisini anında göstereceğiz.';
     }
 
+    if (_entryType == _EntryType.income) {
+      final boost = max(1, (_amount / 250).round());
+      return 'Bu gelir hedef hızını yaklaşık $boost gün öne çekebilir.';
+    }
+
+    if (_entryType == _EntryType.savings) {
+      return 'Bu aktarım birikim havuzunu doğrudan güçlendirir ve görev ilerletir.';
+    }
+
     final dailyLimit = (_profile?.dailyLimit ?? 0).clamp(0.0, double.infinity);
     final divisor = dailyLimit > 0 ? max(dailyLimit * 0.35, 1.0) : 250.0;
     final days = max(1, (_amount / divisor).ceil());
     return 'Bu harcama 2045 hedefini $days gün geciktirecek.';
+  }
+
+  void _setEntryType(_EntryType type) {
+    if (_entryType == type) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _entryType = type;
+      _selectedCategoryIndex = 0;
+    });
   }
 
   void _addDigit(String digit) {
@@ -106,18 +154,30 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     );
   }
 
-  Future<void> _saveExpense() async {
+  Future<void> _saveTransaction() async {
     if (_amount <= 0 || _isSaving) return;
 
     HapticFeedback.mediumImpact();
     setState(() => _isSaving = true);
 
     try {
+      final signedDelta = switch (_entryType) {
+        _EntryType.expense => -_amount,
+        _EntryType.income => _amount,
+        _EntryType.savings => -_amount,
+      };
+      final transferredToSavings = _entryType == _EntryType.savings
+          ? _amount
+          : 0.0;
       final profile = _profile;
       final txn = RecurringTransactionModel(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         userId: profile?.id ?? 'local',
-        type: 'expense',
+        type: _entryType == _EntryType.expense
+            ? 'expense'
+            : _entryType == _EntryType.income
+            ? 'income'
+            : 'saving',
         category: _categories[_selectedCategoryIndex].label,
         amount: _amount,
       );
@@ -125,16 +185,59 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
       final dataSource = LocalDataSource();
       await dataSource.addRecurringTransaction(txn);
       await dataSource.logDailySpending(
-        spentAmount: _amount,
-        transferredToSavings: 0,
+        spentAmount: _entryType == _EntryType.expense ? _amount : 0,
+        transferredToSavings: transferredToSavings,
       );
 
+      // İşlemi profil bakiyesine yansıt.
+      if (profile != null) {
+        final newBalance = (profile.currentBalance + signedDelta)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        final updatedProfile = ProfileModel(
+          id: profile.id,
+          userName: profile.userName,
+          age: profile.age,
+          gender: profile.gender,
+          initialBalance: profile.initialBalance,
+          currentBalance: newBalance,
+          savingsPool: profile.savingsPool + transferredToSavings,
+          level: profile.level,
+          xp: profile.xp,
+          dailyLimit: profile.dailyLimit,
+        );
+        await dataSource.saveProfile(updatedProfile);
+        _profile = updatedProfile;
+
+        final authUserId = SupabaseService.instance.currentUserId;
+        if (authUserId != null) {
+          await SupabaseService.instance.updateProfile(authUserId, {
+            'current_balance': newBalance,
+            'savings_pool': updatedProfile.savingsPool,
+          });
+          await SupabaseService.instance.insertDailyLog(
+            userId: authUserId,
+            spentAmount: _entryType == _EntryType.expense ? _amount : 0,
+            transferredToSavings: transferredToSavings,
+          );
+        }
+      }
+
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(
+        QuickTransactionResult(
+          balanceDelta: signedDelta,
+          transferredToSavings: transferredToSavings,
+        ),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${_categories[_selectedCategoryIndex].label} kaydedildi: $_formattedAmount TL',
+            '${_entryType == _EntryType.expense
+                ? 'Gider'
+                : _entryType == _EntryType.income
+                ? 'Gelir'
+                : 'Birikim'} kaydedildi: ${_categories[_selectedCategoryIndex].label} - $_formattedAmount TL',
           ),
         ),
       );
@@ -219,7 +322,11 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Hızlı Harcama Girişi',
+                                _entryType == _EntryType.expense
+                                    ? 'Hızlı Gider Girişi'
+                                    : _entryType == _EntryType.income
+                                    ? 'Hızlı Gelir Girişi'
+                                    : 'Birikime Aktar',
                                 style: AppTextStyles.titleLarge.copyWith(
                                   color: AppColors.onSurface,
                                   fontWeight: FontWeight.w800,
@@ -236,6 +343,44 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: AppDimensions.spaceXL),
+                    Container(
+                      padding: const EdgeInsets.all(AppDimensions.spaceXS),
+                      decoration: BoxDecoration(
+                        color: AppColors.glass08,
+                        borderRadius: BorderRadius.circular(
+                          AppDimensions.radiusFull,
+                        ),
+                        border: Border.all(color: AppColors.glass12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _TypeTabButton(
+                              label: 'Gider',
+                              isSelected: _entryType == _EntryType.expense,
+                              onTap: () => _setEntryType(_EntryType.expense),
+                            ),
+                          ),
+                          const SizedBox(width: AppDimensions.spaceXS),
+                          Expanded(
+                            child: _TypeTabButton(
+                              label: 'Gelir',
+                              isSelected: _entryType == _EntryType.income,
+                              onTap: () => _setEntryType(_EntryType.income),
+                            ),
+                          ),
+                          const SizedBox(width: AppDimensions.spaceXS),
+                          Expanded(
+                            child: _TypeTabButton(
+                              label: 'Birikim',
+                              isSelected: _entryType == _EntryType.savings,
+                              onTap: () => _setEntryType(_EntryType.savings),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppDimensions.spaceXL),
                     Container(
@@ -342,7 +487,11 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                             children: [
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: _isScanning ? null : _scanReceipt,
+                                  onPressed:
+                                      _isScanning ||
+                                          _entryType == _EntryType.savings
+                                      ? null
+                                      : _scanReceipt,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.neonLime,
                                     foregroundColor: Colors.black,
@@ -424,7 +573,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                     SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _isSaving ? null : _saveExpense,
+                        onPressed: _isSaving ? null : _saveTransaction,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.neonLime,
                           foregroundColor: Colors.black,
@@ -442,8 +591,12 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                                   color: Colors.black,
                                 ),
                               )
-                            : const Text(
-                                'Harcamayı Kaydet',
+                            : Text(
+                                _entryType == _EntryType.expense
+                                    ? 'Gideri Kaydet'
+                                    : _entryType == _EntryType.income
+                                    ? 'Geliri Kaydet'
+                                    : 'Birikime Aktar',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 16,
@@ -453,7 +606,11 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                     ),
                     const SizedBox(height: AppDimensions.spaceS),
                     Text(
-                      'Kaydedilen harcama, günlük log ve AI analizine eklenir.',
+                      _entryType == _EntryType.expense
+                          ? 'Kaydedilen gider, günlük log ve AI analizine eklenir.'
+                          : _entryType == _EntryType.income
+                          ? 'Kaydedilen gelir bakiyene eklenir ve analizde kullanılır.'
+                          : 'Aktarılan tutar birikim havuzuna yazılır ve görev ilerletir.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.labelSmall.copyWith(
                         color: AppColors.onSurfaceVariant,
@@ -462,6 +619,42 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _EntryType { expense, income, savings }
+
+class _TypeTabButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _TypeTabButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? AppColors.neonLime : Colors.transparent,
+      borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppDimensions.spaceS),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelLarge.copyWith(
+              color: isSelected ? Colors.black : AppColors.onSurface,
             ),
           ),
         ),

@@ -28,11 +28,14 @@ class ProfileModel {
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
-      id: json['id'] as String,
+      id: (json['id'] ?? '').toString(),
       userName: json['username'] as String? ?? '',
       age: (json['age'] as num?)?.toInt() ?? 0,
       gender: json['gender'] as String? ?? '',
-      initialBalance: (json['initial_balance'] as num?)?.toDouble() ?? 0.0,
+      initialBalance:
+          ((json['inital_balance'] ?? json['initial_balance']) as num?)
+              ?.toDouble() ??
+          0.0,
       currentBalance: (json['current_balance'] as num?)?.toDouble() ?? 0.0,
       savingsPool: (json['savings_pool'] as num?)?.toDouble() ?? 0.0,
       level: (json['level'] as num?)?.toInt() ?? 1,
@@ -46,7 +49,7 @@ class ProfileModel {
     'username': userName,
     'age': age,
     'gender': gender,
-    'initial_balance': initialBalance,
+    'inital_balance': initialBalance,
     'current_balance': currentBalance,
     'savings_pool': savingsPool,
     'level': level,

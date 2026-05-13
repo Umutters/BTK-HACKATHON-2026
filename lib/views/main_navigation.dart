@@ -26,7 +26,7 @@ class MainNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final dataSource = LocalDataSource();
     final userRepo = UserRepositoryImpl(dataSource);
-    final questRepo = QuestRepositoryImpl(dataSource);
+    final questRepo = QuestRepositoryImpl();
 
     return MultiProvider(
       providers: [
@@ -51,7 +51,7 @@ class _NavigationShell extends StatelessWidget {
 
   Future<void> _showTransactionSheet(BuildContext context) async {
     HapticFeedback.mediumImpact();
-    await showModalBottomSheet<void>(
+    final result = await showModalBottomSheet<QuickTransactionResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -59,6 +59,13 @@ class _NavigationShell extends StatelessWidget {
       barrierColor: Colors.black54,
       builder: (_) => const QuickExpenseSheet(),
     );
+
+    if (result != null && context.mounted) {
+      final homeVm = context.read<HomeViewModel>();
+      homeVm.applyTransactionDelta(result.balanceDelta);
+      await homeVm.processSavingsTransfer(result.transferredToSavings);
+      await homeVm.refreshTransactions();
+    }
   }
 
   static const List<Widget> _screens = [

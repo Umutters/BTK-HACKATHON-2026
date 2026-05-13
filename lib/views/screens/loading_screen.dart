@@ -264,7 +264,7 @@ class _LogLine extends StatelessWidget {
         style: TextStyle(
           fontFamily: 'SpaceGrotesk',
           fontSize: 12,
-          color: color.withOpacity(0.55),
+          color: color.withValues(alpha: 0.55),
           height: 1.5,
         ),
       ),
@@ -388,7 +388,7 @@ class _ProgressSection extends StatelessWidget {
             style: TextStyle(
               fontFamily: 'SpaceGrotesk',
               fontSize: 11,
-              color: AppColors.onSurfaceVariant.withOpacity(0.6),
+              color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
             ),
           ),
         ),

@@ -15,6 +15,7 @@ class LocalDataSource {
   static const _transactionsKey = 'ldb_transactions';
   static const _dailyLogsKey = 'ldb_daily_logs';
   static const _questStatusKey = 'ldb_quest_status';
+  static const _onboardingDoneKey = 'ldb_onboarding_done';
 
   /// main.dart'ta önceden başlatılır.
   static SharedPreferences? sharedPrefs;
@@ -126,6 +127,16 @@ class LocalDataSource {
     return prefs.containsKey(_profileKey);
   }
 
+  Future<void> setOnboardingDone(bool done) async {
+    final prefs = await _prefs;
+    await prefs.setBool(_onboardingDoneKey, done);
+  }
+
+  Future<bool> isOnboardingDone() async {
+    final prefs = await _prefs;
+    return prefs.getBool(_onboardingDoneKey) ?? false;
+  }
+
   // ─── Recurring Transactions ───────────────────────────────────────────────
 
   Future<List<RecurringTransactionModel>> getRecurringTransactions() async {
@@ -198,13 +209,28 @@ class LocalDataSource {
     final json = prefs.getString(_dailyLogsKey);
     final list = json == null ? <dynamic>[] : jsonDecode(json) as List<dynamic>;
     final today = DateTime.now().toIso8601String().substring(0, 10);
+    Map<String, dynamic>? existing;
+    for (final entry in list) {
+      final map = entry as Map<String, dynamic>;
+      if (map['date'] == today) {
+        existing = map;
+        break;
+      }
+    }
+
+    final mergedSpent =
+        ((existing?['spent_amount'] as num?)?.toDouble() ?? 0) + spentAmount;
+    final mergedTransferred =
+        ((existing?['transferred_to_savings'] as num?)?.toDouble() ?? 0) +
+        transferredToSavings;
+
     list.removeWhere((e) => (e as Map<String, dynamic>)['date'] == today);
     list.add({
       'id': today,
       'user_id': 'local',
       'date': today,
-      'spent_amount': spentAmount,
-      'transferred_to_savings': transferredToSavings,
+      'spent_amount': mergedSpent,
+      'transferred_to_savings': mergedTransferred,
     });
     // Son 30 günü tut
     if (list.length > 30) list.removeRange(0, list.length - 30);
@@ -220,6 +246,7 @@ class LocalDataSource {
       prefs.remove(_transactionsKey),
       prefs.remove(_dailyLogsKey),
       prefs.remove(_questStatusKey),
+      prefs.remove(_onboardingDoneKey),
     ]);
   }
 }

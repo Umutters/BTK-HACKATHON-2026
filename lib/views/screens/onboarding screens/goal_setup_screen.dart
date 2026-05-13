@@ -177,7 +177,7 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
 
                     // Subtitle
                     Text(
-                      "Oracle'ın size hangi yönde rehberlik etmesini istersiniz?\nStratejinizi belirleyin, komutları biz hazırlayalım.",
+                      "Yapay zekanın size hangi yönde rehberlik etmesini istersiniz?\nStratejinizi belirleyin, komutları biz hazırlayalım.",
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.onSurfaceVariant,
                         height: 1.5,
@@ -244,7 +244,7 @@ class _AppHeader extends StatelessWidget {
           const Spacer(),
           // Brand
           Text(
-            'FX COMMAND',
+            'KOMUT KONSOLU',
             style: AppTextStyles.displayMedium.copyWith(
               color: AppColors.neonLime,
               fontWeight: FontWeight.w800,

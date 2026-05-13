@@ -5,45 +5,57 @@ import '../models/daily_log_model.dart';
 import '../models/profile_model.dart';
 import '../models/recurring_transaction_model.dart';
 
-/// Gemini 2.5 Flash ile Oracle AI chatbot sohbeti yönetir.
+/// Gemini 2.5 Flash ile kâhin sohbetini yönetir.
 /// Her [GeminiService] örneği bağımsız bir sohbet geçmişi tutar.
 class GeminiService {
-  late final GenerativeModel _model;
-  late final ChatSession _chat;
+  GenerativeModel _model;
+  ChatSession _chat;
 
-  GeminiService() {
-    _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: AppEnv.geminiApiKey,
-      generationConfig: GenerationConfig(
-        temperature: 0.75,
-        maxOutputTokens: 1000,
-        topP: 0.95,
-      ),
-      systemInstruction: Content.system(
-        '''Sen FortuneFlow AI Oracle'sın — kişisel finans uzmanı, bilge bir asistan.
-Kullanıcıya samimi, net ve XAI (Açıklanabilir AI) odaklı yanıtlar ver. 
-Yanıtların 2-4 cümle olsun. Karmaşık finansal durumları metaforlarla açıkla. ''',
-      ),
-    );
-    _chat = _model.startChat();
-  }
+  static const _baseInstruction =
+      'Sen FortuneFlow kişisel finans AI asistanısın. Türkçe yanıt ver.';
 
-  /// Kullanıcı finansal verisiyle zenginleştirilmiş sistem bağlamını başlatır.
-  /// Bu metodu [sendMessage]'dan önce bir kez çağırın.
+  GeminiService()
+    : _model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: AppEnv.geminiApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.7,
+          maxOutputTokens: 1200,
+          topP: 0.95,
+        ),
+        systemInstruction: Content.system(_baseInstruction),
+      ),
+      _chat = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: AppEnv.geminiApiKey,
+        systemInstruction: Content.system(_baseInstruction),
+      ).startChat();
+
+  /// Kullanıcının gerçek Supabase verisiyle model sistem talimatını yeniden
+  /// oluşturur ve sohbeti sıfırlar. sendMessage öncesi çağrılmalı.
   Future<void> initializeContext({
     required ProfileModel profile,
     required List<RecurringTransactionModel> transactions,
     required List<DailyLogModel> recentLogs,
   }) async {
-    final context = _buildSystemContext(
+    final systemInstruction = _buildSystemInstruction(
       profile: profile,
       transactions: transactions,
       recentLogs: recentLogs,
     );
 
-    // İlk mesaj olarak sistem bağlamını gönderiyoruz
-    await _chat.sendMessage(Content.text(context));
+    // Gerçek kullanıcı verisiyle yeni bir model + chat oturumu aç
+    _model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: AppEnv.geminiApiKey,
+      generationConfig: GenerationConfig(
+        temperature: 0.7,
+        maxOutputTokens: 1200,
+        topP: 0.95,
+      ),
+      systemInstruction: Content.system(systemInstruction),
+    );
+    _chat = _model.startChat();
   }
 
   /// Kullanıcı mesajını Gemini'ye gönderir ve AI yanıtını döndürür.
@@ -163,7 +175,7 @@ Lütfen Türkçe ve kısa cevap ver:
     return '$goalName hedefi için mevcut trend $trend görünüyor. Bu gidişle $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M seviyesine ulaşma potansiyelin var. Hedefe daha hızlı gitmek için aylık net katkını en az 1000 TL artırmayı dene.';
   }
 
-  String _buildSystemContext({
+  String _buildSystemInstruction({
     required ProfileModel profile,
     required List<RecurringTransactionModel> transactions,
     required List<DailyLogModel> recentLogs,
@@ -174,49 +186,89 @@ Lütfen Türkçe ve kısa cevap ver:
     final expense = transactions
         .where((t) => t.isExpense)
         .fold(0.0, (sum, t) => sum + t.amount);
+    final savingsTx = transactions
+        .where((t) => t.isSaving)
+        .fold(0.0, (sum, t) => sum + t.amount);
+    final netMonthly = income - expense - savingsTx;
 
-    final transactionLines = transactions
-        .map((t) {
-          final sign = t.isIncome ? '+' : '-';
-          return '  $sign${t.amount.toStringAsFixed(0)} TL ${t.category}';
-        })
+    final sortedLogs = [...recentLogs]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    final totalSpent = sortedLogs.fold(0.0, (sum, l) => sum + l.spentAmount);
+    final totalSavedLogs = sortedLogs.fold(
+      0.0,
+      (sum, l) => sum + l.transferredToSavings,
+    );
+    final avgDailySpend = sortedLogs.isNotEmpty
+        ? totalSpent / sortedLogs.length
+        : 0.0;
+    final daysAboveLimit = sortedLogs
+        .where((l) => l.spentAmount > profile.dailyLimit)
+        .length;
+    final daysBelowLimit = sortedLogs.length - daysAboveLimit;
+
+    final incomeLines = transactions
+        .where((t) => t.isIncome)
+        .map((t) => '  • ${t.category}: +${t.amount.toStringAsFixed(0)} TL/ay')
+        .join('\n');
+    final expenseLines = transactions
+        .where((t) => t.isExpense)
+        .map((t) => '  • ${t.category}: -${t.amount.toStringAsFixed(0)} TL/ay')
+        .join('\n');
+    final savingLines = transactions
+        .where((t) => t.isSaving)
+        .map((t) => '  • ${t.category}: ${t.amount.toStringAsFixed(0)} TL/ay')
         .join('\n');
 
-    final logLines = recentLogs
-        .take(7)
+    final logLines = sortedLogs.reversed
+        .take(14)
         .map((l) {
-          return '  ${l.date.day}/${l.date.month}: ${l.spentAmount.toStringAsFixed(0)} TL harcandı, '
-              '${l.transferredToSavings.toStringAsFixed(0)} TL havuza aktarıldı';
+          final over = l.spentAmount > profile.dailyLimit
+              ? ' ⚠ limit aşıldı'
+              : '';
+          return '  ${l.date.day}/${l.date.month}: harcama ${l.spentAmount.toStringAsFixed(0)} TL'
+              ' | havuz +${l.transferredToSavings.toStringAsFixed(0)} TL$over';
         })
         .join('\n');
+
+    final today = DateTime.now();
 
     return '''
-Sen FortuneFlow AI Oracle'sın — kişisel finans alanında uzmanlaşmış, Türkçe konuşan bir yapay zeka asistanısın.
-Kullanıcıya samimi, net ve aksiyon odaklı yanıtlar ver. Finansal terimler kullan ama anlaşılır tut.
-Yanıtlarını kısa tut (2-4 cümle). Eğer simülasyon veya grafik önereceğin durumlar olursa belirt.
+Sen "FortuneFlow" uygulamasının kişisel finans AI asistanısın. Türkçe yanıt ver.
 
-─── KULLANICI PROFİLİ ───
-Ad: ${profile.userName}
+TEMEL KURALLAR:
+• Aşağıdaki GERÇEK kullanıcı verilerini kullanarak yanıt ver — genel tavsiye verme.
+• Her yanıtta en az bir somut sayıya (TL, %, gün) değin.
+• Kullanıcının adını (${profile.userName}) zaman zaman kullan.
+• Yanıtları 2-4 cümle tut; kritik uyarıları öne al.
+• Önemli rakamları **kalın** yaz.
+• Kullanıcı simülasyon veya grafik isterse "Simülasyon ekranına bakabilirsin" de.
+• Bilinmeyen bilgi için veri yetersizliğini belirt, uydurma.
+
+═══ KULLANICI: ${profile.userName} ═══
 Yaş: ${profile.age} | Cinsiyet: ${profile.gender}
-Seviye: ${profile.level} | XP: ${profile.xp}
+Seviye: Lv${profile.level} | XP: ${profile.xp}
 
-─── FİNANSAL DURUM ───
-Güncel Bakiye: ${profile.currentBalance.toStringAsFixed(2)} TL
-Tasarruf Havuzu: ${profile.savingsPool.toStringAsFixed(2)} TL
-Günlük Harcama Limiti: ${profile.dailyLimit.toStringAsFixed(2)} TL
-Başlangıç Bakiyesi: ${profile.initialBalance.toStringAsFixed(2)} TL
+─── ANLK FİNANSAL DURUM (${today.day}/${today.month}/${today.year}) ───
+💰 Güncel Bakiye   : ${profile.currentBalance.toStringAsFixed(0)} TL
+🏦 Tasarruf Havuzu : ${profile.savingsPool.toStringAsFixed(0)} TL
+📅 Günlük Limit    : ${profile.dailyLimit.toStringAsFixed(0)} TL
+📊 Aylık Net Fazla : ${netMonthly.toStringAsFixed(0)} TL
+📈 Başlangıç Bak.  : ${profile.initialBalance.toStringAsFixed(0)} TL
+🔄 Net Değişim     : ${(profile.currentBalance - profile.initialBalance).toStringAsFixed(0)} TL
 
-─── AYLIK DÜZENLİ İŞLEMLER ───
-Toplam Gelir: +${income.toStringAsFixed(0)} TL
-Toplam Gider: -${expense.toStringAsFixed(0)} TL
-Net Aylık: ${(income - expense).toStringAsFixed(0)} TL
-Detay:
-$transactionLines
+─── AYLIK GELİRLER (+${income.toStringAsFixed(0)} TL) ───
+${incomeLines.isEmpty ? '  (kayıt yok)' : incomeLines}
 
-─── SON 7 GÜN ───
-$logLines
+─── AYLIK GİDERLER (-${expense.toStringAsFixed(0)} TL) ───
+${expenseLines.isEmpty ? '  (kayıt yok)' : expenseLines}
+${savingLines.isNotEmpty ? '\n─── TASARRUF KESİNTİLERİ (${savingsTx.toStringAsFixed(0)} TL) ───\n$savingLines\n' : ''}
+─── SON ${sortedLogs.length} GÜN ANALİZİ ───
+Toplam harcama   : ${totalSpent.toStringAsFixed(0)} TL
+Ortalama/gün     : ${avgDailySpend.toStringAsFixed(0)} TL  (limit: ${profile.dailyLimit.toStringAsFixed(0)} TL)
+Havuza aktarılan : ${totalSavedLogs.toStringAsFixed(0)} TL
+Limit aşan gün   : $daysAboveLimit  |  Limit altı gün: $daysBelowLimit
 
-Bu verilerle kullanıcıya kişiselleştirilmiş finansal tavsiye ver.
+${logLines.isEmpty ? '  (log kaydı yok)' : logLines}
 ''';
   }
 }

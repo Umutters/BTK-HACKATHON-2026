@@ -72,7 +72,12 @@ class _OracleViewState extends State<_OracleView> {
                     if (msgIndex < vm.messages.length) {
                       final msg = vm.messages[msgIndex];
                       return msg.sender == MessageSender.oracle
-                          ? _OracleBubble(message: msg)
+                          ? _OracleBubble(
+                              message: msg,
+                              onAction: (text) => context
+                                  .read<OracleViewModel>()
+                                  .sendMessage(text),
+                            )
                           : _UserBubble(message: msg);
                     }
                     // typing indicator
@@ -81,6 +86,11 @@ class _OracleViewState extends State<_OracleView> {
                   },
                 ),
               ),
+              if (vm.messages.length < 3)
+                _QuickSuggestions(
+                  onTap: (text) =>
+                      context.read<OracleViewModel>().sendMessage(text),
+                ),
               _InputBar(
                 controller: _controller,
                 onSend: () {
@@ -132,7 +142,7 @@ class _OracleAppBar extends StatelessWidget implements PreferredSizeWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'FortuneFlow AI',
+            'FortuneFlow Yapay Zeka',
             style: AppTextStyles.titleLarge.copyWith(
               color: AppColors.cyberBlue,
               fontWeight: FontWeight.w800,
@@ -153,7 +163,7 @@ class _OracleAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
               const SizedBox(width: 5),
               Text(
-                'ORACLE ÇEVRİMİÇİ',
+                'KÂHİN ÇEVRİMİÇİ',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: AppColors.neonLimeDim,
                   letterSpacing: 1.5,
@@ -164,13 +174,52 @@ class _OracleAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: AppDimensions.spaceL),
-          child: Icon(
-            Icons.bolt_rounded,
-            color: AppColors.cyberBlue,
+        IconButton(
+          onPressed: () {
+            showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppColors.surfaceContainerLow,
+                title: Text(
+                  'Sohbeti Temizle',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                content: Text(
+                  'Tüm mesajlar silinecek. Devam etmek istiyor musun?',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(
+                      'İptal',
+                      style: TextStyle(color: AppColors.onSurfaceVariant),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      context.read<OracleViewModel>().clearChat();
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text(
+                      'Temizle',
+                      style: TextStyle(color: AppColors.cyberMagenta),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          icon: const Icon(
+            Icons.delete_sweep_rounded,
+            color: AppColors.onSurfaceVariant,
             size: AppDimensions.iconL,
           ),
+          padding: const EdgeInsets.only(right: AppDimensions.spaceS),
         ),
       ],
     );
@@ -204,7 +253,7 @@ class _ChatHeader extends StatelessWidget {
           ),
           const SizedBox(height: AppDimensions.spaceM),
           Text(
-            'Oracle Analizi Hazır',
+            'Kahin Analizi Hazır',
             style: AppTextStyles.titleLarge.copyWith(
               color: AppColors.onSurface,
             ),
@@ -228,7 +277,8 @@ class _ChatHeader extends StatelessWidget {
 
 class _OracleBubble extends StatelessWidget {
   final ChatMessage message;
-  const _OracleBubble({required this.message});
+  final void Function(String)? onAction;
+  const _OracleBubble({required this.message, this.onAction});
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +288,7 @@ class _OracleBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'ORACLE',
+            'KÂHİN',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.neonLime,
               letterSpacing: 2.0,
@@ -263,13 +313,17 @@ class _OracleBubble extends StatelessWidget {
                 _RichOracleText(text: message.text),
                 if (message.actionButtons != null) ...[
                   const SizedBox(height: AppDimensions.spaceM),
-                  ...message.actionButtons!.map(
-                    (btn) => Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: AppDimensions.spaceS,
-                      ),
-                      child: _ActionButton(label: btn),
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: message.actionButtons!
+                        .map(
+                          (btn) => _ActionButton(
+                            label: btn,
+                            onTap: () => onAction?.call(btn),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
                 if (message.dataCard != null) ...[
@@ -338,23 +392,27 @@ class _RichOracleText extends StatelessWidget {
 
 class _ActionButton extends StatelessWidget {
   final String label;
-  const _ActionButton({required this.label});
+  final VoidCallback? onTap;
+  const _ActionButton({required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-        border: Border.all(color: AppColors.cyberBlue),
-        color: AppColors.cyberBlue10,
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelMedium.copyWith(
-          color: AppColors.cyberBlue,
-          fontSize: 13,
-          letterSpacing: 0.3,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+          border: Border.all(color: AppColors.cyberBlue),
+          color: AppColors.cyberBlue10,
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.cyberBlue,
+            fontSize: 13,
+            letterSpacing: 0.3,
+          ),
         ),
       ),
     );
@@ -430,7 +488,7 @@ class _UserBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            'SİZ',
+            'SEN',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.cyberBlue,
               letterSpacing: 2.0,
@@ -509,7 +567,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'ORACLE',
+            'KÂHİN',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.neonLime,
               letterSpacing: 2.0,
@@ -582,21 +640,6 @@ class _InputBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.glass08,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                border: Border.all(color: AppColors.glass12),
-              ),
-              child: const Icon(
-                Icons.attach_file_rounded,
-                color: AppColors.onSurfaceVariant,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: AppDimensions.spaceM),
             Expanded(
               child: TextField(
                 controller: controller,
@@ -605,7 +648,7 @@ class _InputBar extends StatelessWidget {
                   fontSize: 15,
                 ),
                 decoration: InputDecoration(
-                  hintText: "Oracle'a komut ver...",
+                  hintText: 'Kâhine komut ver...',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.outline,
                     fontSize: 15,
@@ -661,6 +704,53 @@ class _InputBar extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Quick Suggestions ────────────────────────────────────────────────────────
+
+class _QuickSuggestions extends StatelessWidget {
+  final void Function(String) onTap;
+  const _QuickSuggestions({required this.onTap});
+
+  static const _suggestions = [
+    'Günlük harcama analiz et',
+    'Tasarruf önerisi ver',
+    'Bu ay nasıl gidiyor?',
+    'Risk değerlendirmesi yap',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.pagePaddingH,
+        ),
+        itemCount: _suggestions.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) => GestureDetector(
+          onTap: () => onTap(_suggestions[i]),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+              border: Border.all(color: AppColors.glass15),
+              color: AppColors.glass08,
+            ),
+            child: Text(
+              _suggestions[i],
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
+          ),
         ),
       ),
     );

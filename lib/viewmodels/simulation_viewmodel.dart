@@ -48,15 +48,17 @@ class SimulationViewModel extends ChangeNotifier {
   final GeminiService _geminiService;
   final DateTime Function() _now;
 
-  static const int _projectionYears = 20;
-  static const double _annualReturnRate = 0.08;
+  static const int _targetYear = 2045;
+  static const double _defaultAnnualReturnRate = 0.08;
 
   late final int _startYear;
   late final int _endYear;
 
-  List<ProjectionPoint> _allPoints = const [];
+  List<ProjectionPoint> _currentPoints = const [];
+  List<ProjectionPoint> _optimizedPoints = const [];
   List<TransactionImpact> _transactionImpacts = const [];
-  double _sliderValue = 0.35;
+  double _extraDailySavings = 0.0;
+  double _annualReturnRateSlider = _defaultAnnualReturnRate;
   bool _isLoading = true;
   bool _isGeneratingAi = false;
 
@@ -78,20 +80,23 @@ class SimulationViewModel extends ChangeNotifier {
        _geminiService = geminiService ?? GeminiService(),
        _now = now ?? DateTime.now {
     _startYear = _now().year;
-    _endYear = _startYear + _projectionYears;
+    _endYear = _targetYear;
     _bootstrap();
   }
 
   bool get isLoading => _isLoading;
   bool get isGeneratingAi => _isGeneratingAi;
 
-  double get sliderValue => _sliderValue;
+  double get extraDailySavings => _extraDailySavings;
+  double get annualReturnRateSlider => _annualReturnRateSlider;
   int get startYear => _startYear;
   int get endYear => _endYear;
   double get goalMillions => _goalMillions;
   String get goalName => _goalName;
   double get monthlySurplus => _monthlySurplus;
   List<TransactionImpact> get transactionImpacts => _transactionImpacts;
+  List<ProjectionPoint> get currentPoints => _currentPoints;
+  List<ProjectionPoint> get optimizedPoints => _optimizedPoints;
 
   List<ProjectionTableRow> get projectionRows {
     return visiblePoints
@@ -105,29 +110,22 @@ class SimulationViewModel extends ChangeNotifier {
         .toList();
   }
 
-  int get selectedYear {
-    return _startYear + (_sliderValue * (_endYear - _startYear)).round();
-  }
-
-  List<ProjectionPoint> get visiblePoints {
-    return _allPoints.where((p) => p.year <= selectedYear).toList();
-  }
+  List<ProjectionPoint> get visiblePoints => _currentPoints;
 
   double get targetAmountMillions {
-    final pts = visiblePoints;
-    if (pts.isEmpty) return 0;
-    return pts.last.amountMillions;
+    if (_optimizedPoints.isEmpty) return 0;
+    return _optimizedPoints.last.amountMillions;
   }
 
   String get formattedTarget {
     final m = targetAmountMillions;
-    if (m >= 1000) return '\$${(m / 1000).toStringAsFixed(1)}B';
-    if (m >= 1) return '\$${m.toStringAsFixed(1)}M';
-    return '\$${(m * 1000).toStringAsFixed(0)}K';
+    if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)}B TL';
+    if (m >= 1) return '${m.toStringAsFixed(1)}M TL';
+    return '${(m * 1000).toStringAsFixed(0)}K TL';
   }
 
   int get aiGoalYear {
-    for (final pt in _allPoints) {
+    for (final pt in _optimizedPoints) {
       if (pt.amountMillions >= _goalMillions) return pt.year;
     }
     return _endYear;
@@ -138,29 +136,53 @@ class SimulationViewModel extends ChangeNotifier {
       return _aiInsightOverride!;
     }
 
-    if (_allPoints.isEmpty) {
-      return 'Simulation data is loading...';
+    if (_currentPoints.isEmpty) {
+      return 'Simülasyon verileri yükleniyor...';
     }
 
-    final finalAmount = _allPoints.last.amountMillions;
-    if (finalAmount >= _goalMillions) {
-      return "At this rate, you'll reach your goal by $aiGoalYear.";
+    final currentFinal = _currentPoints.last.amountMillions;
+    final optimizedFinal = _optimizedPoints.isEmpty
+        ? currentFinal
+        : _optimizedPoints.last.amountMillions;
+    final gain = optimizedFinal - currentFinal;
+
+    if (currentFinal >= _goalMillions) {
+      return 'Mevcut rotanla $aiGoalYear yılında ${_goalMillions.toStringAsFixed(1)}M TL hedefine ulaşıyorsun. Oracle seni takip ediyor.';
     }
 
-    final gapMillions = (_goalMillions - finalAmount).clamp(0, double.infinity);
+    if (_extraDailySavings > 0 && gain > 0.01) {
+      return 'Günlük ${_extraDailySavings.toStringAsFixed(0)} TL ek tasarruf ve %${(_annualReturnRateSlider * 100).toStringAsFixed(0)} getiriyle 2045\'te ${optimizedFinal.toStringAsFixed(1)}M TL\'ye ulaşabilirsin. Mevcut rotana göre ${gain.toStringAsFixed(1)}M TL avantaj.';
+    }
+
+    final gapMillions = (_goalMillions - currentFinal).clamp(
+      0,
+      double.infinity,
+    );
     final remainingYears = max(1, _endYear - _startYear);
-    final suggestedMonthly = ((gapMillions * 1000000) / (remainingYears * 12));
+    final suggestedMonthly = (gapMillions * 1000000) / (remainingYears * 12);
 
-    return 'Current pace reaches ${finalAmount.toStringAsFixed(1)}M by $_endYear. Increase monthly surplus by about ${suggestedMonthly.toStringAsFixed(0)} TL to hit the target earlier.';
+    return 'Mevcut hızla $_endYear yılına kadar ${currentFinal.toStringAsFixed(1)}M TL seviyesine ulaşırsın. Hedefe daha erken varmak için aylık fazlanı yaklaşık ${suggestedMonthly.toStringAsFixed(0)} TL artırabilirsin.';
   }
 
-  void setSliderValue(double value) {
-    _sliderValue = value.clamp(0.0, 1.0);
+  void setExtraDailySavings(double value) {
+    _extraDailySavings = value.clamp(0, 500);
+    _rebuildOptimized();
+    notifyListeners();
+  }
+
+  void setAnnualReturnRate(double value) {
+    _annualReturnRateSlider = value.clamp(0.05, 0.25);
+    _rebuildOptimized();
+    notifyListeners();
+  }
+
+  void setRetirementGoal(double millions) {
+    _goalMillions = millions.clamp(0.1, 20.0);
     notifyListeners();
   }
 
   Future<void> generateAiInsight() async {
-    if (_profile == null || _allPoints.isEmpty) {
+    if (_profile == null || _currentPoints.isEmpty) {
       return;
     }
 
@@ -232,17 +254,26 @@ class SimulationViewModel extends ChangeNotifier {
       logs: logs,
     );
 
-    _allPoints = _buildProjectionCurve(
+    _currentPoints = _buildFvCurve(
       startYear: _startYear,
-      years: _projectionYears,
-      baseAmount: baseAmount,
-      monthlySurplus: _monthlySurplus,
+      targetYear: _targetYear,
+      initialAmount: baseAmount,
+      monthlyPmt: _monthlySurplus,
+      annualRate: _defaultAnnualReturnRate,
+    );
+
+    _optimizedPoints = _buildFvCurve(
+      startYear: _startYear,
+      targetYear: _targetYear,
+      initialAmount: baseAmount,
+      monthlyPmt: _monthlySurplus + _extraDailySavings * 30,
+      annualRate: _annualReturnRateSlider,
     );
 
     _transactionImpacts = _buildTransactionImpacts(transactions, logs, profile);
 
-    final startMillions = _allPoints.isNotEmpty
-        ? _allPoints.first.amountMillions
+    final startMillions = _currentPoints.isNotEmpty
+        ? _currentPoints.first.amountMillions
         : 0;
     final goalMultiplier = _goalMultiplierFor(_goalId);
     final trendBoost = max(0, _monthlySurplus) * 24;
@@ -250,6 +281,18 @@ class SimulationViewModel extends ChangeNotifier {
     final fallbackGoal = max(150000, max(goalFromProfile, trendBoost));
     final goalMillions = max(startMillions + 0.1, fallbackGoal / 1000000);
     _goalMillions = goalMillions.clamp(0.2, 20.0);
+  }
+
+  void _rebuildOptimized() {
+    if (_profile == null) return;
+    final baseAmount = _estimateBaseWealth(_profile);
+    _optimizedPoints = _buildFvCurve(
+      startYear: _startYear,
+      targetYear: _targetYear,
+      initialAmount: baseAmount,
+      monthlyPmt: _monthlySurplus + _extraDailySavings * 30,
+      annualRate: _annualReturnRateSlider,
+    );
   }
 
   List<TransactionImpact> _buildTransactionImpacts(
@@ -371,22 +414,28 @@ class SimulationViewModel extends ChangeNotifier {
         monthlyVariableSpend;
   }
 
-  List<ProjectionPoint> _buildProjectionCurve({
+  List<ProjectionPoint> _buildFvCurve({
     required int startYear,
-    required int years,
-    required double baseAmount,
-    required double monthlySurplus,
+    required int targetYear,
+    required double initialAmount,
+    required double monthlyPmt,
+    required double annualRate,
   }) {
     final points = <ProjectionPoint>[];
-    var total = max(0, baseAmount);
+    final totalYears = (targetYear - startYear).clamp(1, 50);
+    final r = annualRate / 12;
+    final p = max(0, initialAmount);
 
-    for (var i = 0; i <= years; i++) {
-      if (i > 0) {
-        total = (total + (monthlySurplus * 12)) * (1 + _annualReturnRate);
-        total = max(0, total);
+    for (var y = 0; y <= totalYears; y++) {
+      final t = (y * 12).toDouble();
+      double fv;
+      if (r == 0) {
+        fv = p + monthlyPmt * t;
+      } else {
+        final cf = pow(1 + r, t);
+        fv = p * cf + monthlyPmt * (cf - 1) / r;
       }
-
-      points.add(ProjectionPoint(startYear + i, total / 1000000));
+      points.add(ProjectionPoint(startYear + y, max(0.0, fv) / 1000000));
     }
 
     return points;

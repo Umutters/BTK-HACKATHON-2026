@@ -53,7 +53,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             body: SafeArea(
               child: Column(
                 children: [
-                  // ── Top row: wordmark + skip ─────────────────────────────
+                  // ── Üst satır: logo + atla ────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                       AppDimensions.pagePaddingH,
@@ -87,7 +87,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ),
                           ],
                         ),
-                        // Skip button
+                        // Atla düğmesi
                         AnimatedOpacity(
                           opacity: vm.isLastPage ? 0.0 : 1.0,
                           duration: const Duration(milliseconds: 200),
@@ -105,7 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: const Text(
-                                'SKIP',
+                                'ATLA',
                                 style: AppTextStyles.labelMedium,
                               ),
                             ),
@@ -144,7 +144,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                         const SizedBox(height: AppDimensions.spaceXXL),
                         FfButton(
-                          label: vm.isLastPage ? 'GET STARTED' : 'NEXT',
+                          label: vm.isLastPage ? 'BAŞLA' : 'İLERİ',
                           onTap: vm.isLastPage
                               ? _finish
                               : () => _controller.nextPage(

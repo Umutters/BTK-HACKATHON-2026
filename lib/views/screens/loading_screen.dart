@@ -113,7 +113,7 @@ class _LoadingScreenState extends State<LoadingScreen>
               // ── Brand ──────────────────────────────────────────────────────
               Center(
                 child: Text(
-                  'FX COMMAND',
+                  'KOMUT KONSOLU',
                   style: AppTextStyles.displayMedium.copyWith(
                     color: AppColors.neonLime,
                     fontWeight: FontWeight.w800,
@@ -165,7 +165,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                           _DotIndicator(color: AppColors.neonLime),
                           const SizedBox(width: AppDimensions.spaceM),
                           const Text(
-                            'fx_oracle — bash',
+                            'konsol — kabuk',
                             style: TextStyle(
                               fontFamily: 'SpaceGrotesk',
                               fontSize: 11,

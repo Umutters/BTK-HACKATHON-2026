@@ -38,7 +38,7 @@ class SimulationScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   _ProjectionTableCard(vm: vm),
                   const SizedBox(height: 28),
-                  _TimelineSlider(vm: vm),
+                  _WhatIfSlidersPanel(vm: vm),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -83,7 +83,7 @@ class _SimAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       title: Text(
-        'FortuneFlow AI',
+        'FortuneFlow Yapay Zeka',
         style: AppTextStyles.titleLarge.copyWith(
           color: AppColors.cyberBlue,
           fontWeight: FontWeight.w800,
@@ -105,7 +105,7 @@ class _SimAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-// ─── Target Projection Header ────────────────────────────────────────────────
+// ─── Hedef projeksiyonu başlığı ──────────────────────────────────────────────
 
 class _TargetProjectionHeader extends StatelessWidget {
   final SimulationViewModel vm;
@@ -116,7 +116,7 @@ class _TargetProjectionHeader extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'TARGET PROJECTION',
+          '2045 OPTİMİZE HEDEF',
           style: AppTextStyles.labelSmall.copyWith(
             color: AppColors.onSurfaceVariant,
             letterSpacing: 2.0,
@@ -159,18 +159,45 @@ class _ProjectionChartCard extends StatelessWidget {
         children: [
           Expanded(
             child: CustomPaint(
-              painter: _ChartPainter(points: vm.visiblePoints),
+              painter: _DualChartPainter(
+                currentPoints: vm.currentPoints,
+                optimizedPoints: vm.optimizedPoints,
+                goalMillions: vm.goalMillions,
+              ),
               child: const SizedBox.expand(),
             ),
           ),
           const SizedBox(height: 8),
-          // Mid-year label
-          Text(
-            '${vm.startYear + ((vm.selectedYear - vm.startYear) / 2).round()}',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.cyberBlueDim,
-              fontSize: 11,
-            ),
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _LegendDot(color: AppColors.cyberBlue, label: 'Mevcut Rota'),
+              const SizedBox(width: 16),
+              _LegendDot(color: AppColors.neonLime, label: 'Optimize Rota'),
+              const SizedBox(width: 16),
+              _LegendDot(color: AppColors.cyberMagenta, label: 'Hedef'),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${vm.startYear}',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.cyberBlueDim,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                '2045',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.cyberBlueDim,
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -178,146 +205,211 @@ class _ProjectionChartCard extends StatelessWidget {
   }
 }
 
-// ─── Chart CustomPainter ──────────────────────────────────────────────────────
+// ─── Dual Chart CustomPainter ─────────────────────────────────────────────────
 
-class _ChartPainter extends CustomPainter {
-  final List<ProjectionPoint> points;
+class _DualChartPainter extends CustomPainter {
+  final List<ProjectionPoint> currentPoints;
+  final List<ProjectionPoint> optimizedPoints;
+  final double goalMillions;
 
-  const _ChartPainter({required this.points});
+  const _DualChartPainter({
+    required this.currentPoints,
+    required this.optimizedPoints,
+    required this.goalMillions,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
+    if (currentPoints.length < 2) return;
 
-    final minAmount = points.map((p) => p.amountMillions).reduce(min);
-    final maxAmount = points.map((p) => p.amountMillions).reduce(max);
+    final allAmounts = [
+      ...currentPoints.map((p) => p.amountMillions),
+      if (optimizedPoints.isNotEmpty)
+        ...optimizedPoints.map((p) => p.amountMillions),
+      goalMillions,
+    ];
+
+    const minAmount = 0.0;
+    final maxAmount = allAmounts.reduce(max) * 1.08;
     final amountRange = (maxAmount - minAmount).clamp(0.001, double.infinity);
 
-    final minYear = points.first.year.toDouble();
-    final maxYear = points.last.year.toDouble();
+    final minYear = currentPoints.first.year.toDouble();
+    final maxYear = currentPoints.last.year.toDouble();
     final yearRange = (maxYear - minYear).clamp(1.0, double.infinity);
 
-    final padding = const EdgeInsets.only(
-      left: 4,
-      right: 4,
-      top: 12,
-      bottom: 4,
+    const padL = 4.0, padR = 4.0, padT = 16.0, padB = 4.0;
+    final w = size.width - padL - padR;
+    final h = size.height - padT - padB;
+
+    double xPos(double year) => padL + ((year - minYear) / yearRange) * w;
+    double yPos(double amount) =>
+        padT + h * (1 - (amount - minAmount) / amountRange);
+
+    // ── Goal horizontal dashed line (cyberMagenta) ─────────────────────
+    final goalY = yPos(goalMillions);
+    if (goalY >= padT && goalY <= size.height - padB) {
+      final goalPaint = Paint()
+        ..color = AppColors.cyberMagenta.withAlpha(160)
+        ..strokeWidth = 1.5;
+      _drawDashedH(canvas, padL, size.width - padR, goalY, goalPaint);
+    }
+
+    // ── Current path (cyberBlue) ───────────────────────────────────────
+    _drawCurve(
+      canvas,
+      currentPoints,
+      xPos,
+      yPos,
+      color: AppColors.cyberBlue,
+      strokeWidth: 2.0,
     );
 
-    Offset toCanvas(ProjectionPoint p) {
-      final x =
-          padding.left +
-          ((p.year - minYear) / yearRange) *
-              (size.width - padding.left - padding.right);
-      final y =
-          padding.top +
-          (size.height - padding.top - padding.bottom) -
-          ((p.amountMillions - minAmount) / amountRange) *
-              (size.height - padding.top - padding.bottom);
-      return Offset(x, y);
+    // ── Optimized path (neonLime) ──────────────────────────────────────
+    if (optimizedPoints.length >= 2) {
+      _drawCurve(
+        canvas,
+        optimizedPoints,
+        xPos,
+        yPos,
+        color: AppColors.neonLime,
+        strokeWidth: 2.5,
+      );
     }
 
-    final offsets = points.map(toCanvas).toList();
+    // ── Endpoint dots ─────────────────────────────────────────────────
+    if (currentPoints.isNotEmpty) {
+      final ep = Offset(
+        xPos(currentPoints.last.year.toDouble()),
+        yPos(currentPoints.last.amountMillions),
+      );
+      canvas.drawCircle(
+        ep,
+        5,
+        Paint()..color = AppColors.cyberBlue.withAlpha(200),
+      );
+    }
+    if (optimizedPoints.isNotEmpty) {
+      final ep = Offset(
+        xPos(optimizedPoints.last.year.toDouble()),
+        yPos(optimizedPoints.last.amountMillions),
+      );
+      canvas.drawCircle(
+        ep,
+        12,
+        Paint()
+          ..color = AppColors.neonLime.withAlpha(50)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+      canvas.drawCircle(ep, 6, Paint()..color = AppColors.neonLime);
+      canvas.drawCircle(ep, 3, Paint()..color = AppColors.background);
+    }
+  }
 
-    // ── Glow passes ───────────────────────────────────────────────────────
-    for (int i = 3; i >= 1; i--) {
-      final glowPaint = Paint()
-        ..color = AppColors.cyberBlue.withAlpha((25 + i * 18).round())
-        ..strokeWidth = 1.5 + i * 3.5
+  void _drawCurve(
+    Canvas canvas,
+    List<ProjectionPoint> points,
+    double Function(double) xPos,
+    double Function(double) yPos, {
+    required Color color,
+    required double strokeWidth,
+  }) {
+    final path = _buildPath(points, xPos, yPos);
+
+    // Glow pass
+    for (int i = 2; i >= 1; i--) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color.withAlpha((18 + i * 22).round())
+          ..strokeWidth = strokeWidth + i * 4
+          ..style = PaintingStyle.stroke
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+    }
+    // Main line
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..strokeWidth = strokeWidth
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
 
-      final path = Path()..moveTo(offsets.first.dx, offsets.first.dy);
-      for (int j = 1; j < offsets.length; j++) {
-        // Smooth bezier
-        final prev = offsets[j - 1];
-        final curr = offsets[j];
-        final cpx = (prev.dx + curr.dx) / 2;
-        path.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
-      }
-      canvas.drawPath(path, glowPaint);
-    }
-
-    // ── Main line ─────────────────────────────────────────────────────────
-    final linePaint = Paint()
-      ..color = AppColors.cyberBlue
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final mainPath = Path()..moveTo(offsets.first.dx, offsets.first.dy);
+  Path _buildPath(
+    List<ProjectionPoint> points,
+    double Function(double) xPos,
+    double Function(double) yPos,
+  ) {
+    final offsets = points
+        .map((p) => Offset(xPos(p.year.toDouble()), yPos(p.amountMillions)))
+        .toList();
+    final path = Path()..moveTo(offsets.first.dx, offsets.first.dy);
     for (int j = 1; j < offsets.length; j++) {
       final prev = offsets[j - 1];
       final curr = offsets[j];
       final cpx = (prev.dx + curr.dx) / 2;
-      mainPath.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
+      path.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
     }
-    canvas.drawPath(mainPath, linePaint);
-
-    // ── Vertical dashed line at midpoint ──────────────────────────────────
-    final midIndex = offsets.length ~/ 2;
-    if (midIndex > 0 && midIndex < offsets.length) {
-      final midOffset = offsets[midIndex];
-      final dashPaint = Paint()
-        ..color = AppColors.cyberBlue.withAlpha(80)
-        ..strokeWidth = 1;
-      _drawDashedVertical(canvas, midOffset.dx, 0, size.height, dashPaint);
-
-      // Hollow circle at midpoint
-      canvas.drawCircle(midOffset, 7, Paint()..color = AppColors.background);
-      canvas.drawCircle(
-        midOffset,
-        7,
-        Paint()
-          ..color = AppColors.cyberBlue
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-    }
-
-    // ── Endpoint filled circle with glow ──────────────────────────────────
-    final endOffset = offsets.last;
-    canvas.drawCircle(
-      endOffset,
-      14,
-      Paint()
-        ..color = AppColors.cyberBlue.withAlpha(60)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
-    canvas.drawCircle(endOffset, 8, Paint()..color = AppColors.cyberBlue);
-    // Inner dark dot
-    canvas.drawCircle(endOffset, 3.5, Paint()..color = AppColors.background);
+    return path;
   }
 
-  void _drawDashedVertical(
+  void _drawDashedH(
     Canvas canvas,
-    double x,
-    double top,
-    double bottom,
+    double x1,
+    double x2,
+    double y,
     Paint paint,
   ) {
-    const dashLen = 5.0;
-    const gapLen = 4.0;
-    double y = top;
-    while (y < bottom) {
+    const dashLen = 6.0, gapLen = 4.0;
+    double x = x1;
+    while (x < x2) {
       canvas.drawLine(
         Offset(x, y),
-        Offset(x, (y + dashLen).clamp(top, bottom)),
+        Offset((x + dashLen).clamp(x1, x2), y),
         paint,
       );
-      y += dashLen + gapLen;
+      x += dashLen + gapLen;
     }
   }
 
   @override
-  bool shouldRepaint(_ChartPainter old) =>
-      old.points.length != points.length ||
-      (old.points.isNotEmpty &&
-          points.isNotEmpty &&
-          old.points.last.year != points.last.year);
+  bool shouldRepaint(_DualChartPainter old) =>
+      old.currentPoints.length != currentPoints.length ||
+      old.optimizedPoints.length != optimizedPoints.length ||
+      old.goalMillions != goalMillions;
+}
+
+// ─── Legend Dot ───────────────────────────────────────────────────────────────
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.onSurfaceVariant,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ─── AI Insight Card ──────────────────────────────────────────────────────────
@@ -357,7 +449,7 @@ class _AiInsightCard extends StatelessWidget {
               ),
               const SizedBox(width: AppDimensions.spaceS),
               Text(
-                'AI ORACLE',
+                'YAPAY ZEKA YORUMU',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: AppColors.cyberBlueDim,
                   letterSpacing: 1.5,
@@ -390,7 +482,7 @@ class _AiInsightCard extends StatelessWidget {
                     )
                   : const Icon(Icons.auto_awesome_rounded, size: 16),
               label: Text(
-                vm.isGeneratingAi ? 'Uretiliyor...' : 'AI Yorumu Guncelle',
+                vm.isGeneratingAi ? 'Üretiliyor...' : 'Yorumu Yenile',
               ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.cyberBlue),
@@ -599,58 +691,124 @@ String _formatTl(double value) {
   return '$sign${absValue.toStringAsFixed(0)} TL';
 }
 
-// ─── Timeline Slider ──────────────────────────────────────────────────────────
+// ─── What-If Sliders Panel ────────────────────────────────────────────────────
 
-class _TimelineSlider extends StatelessWidget {
+class _WhatIfSlidersPanel extends StatelessWidget {
   final SimulationViewModel vm;
-  const _TimelineSlider({required this.vm});
+  const _WhatIfSlidersPanel({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spaceL),
+      decoration: BoxDecoration(
+        color: AppColors.glass08,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+        border: Border.all(color: AppColors.glass12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'WHAT-IF ANALİZİ',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.cyberBlueDim,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          _SliderRow(
+            label: 'Günlük Ek Tasarruf',
+            value: vm.extraDailySavings,
+            min: 0,
+            max: 500,
+            displayValue: '${vm.extraDailySavings.round()} TL',
+            onChanged: (v) =>
+                context.read<SimulationViewModel>().setExtraDailySavings(v),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          _SliderRow(
+            label: 'Yıllık Bileşik Getiri',
+            value: vm.annualReturnRateSlider * 100,
+            min: 5,
+            max: 25,
+            displayValue: '%${(vm.annualReturnRateSlider * 100).round()}',
+            onChanged: (v) => context
+                .read<SimulationViewModel>()
+                .setAnnualReturnRate(v / 100),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          _SliderRow(
+            label: 'Emeklilik Hedefi',
+            value: vm.goalMillions.clamp(0.5, 20.0),
+            min: 0.5,
+            max: 20,
+            displayValue: '${vm.goalMillions.toStringAsFixed(1)}M TL',
+            onChanged: (v) =>
+                context.read<SimulationViewModel>().setRetirementGoal(v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SliderRow extends StatelessWidget {
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final String displayValue;
+  final ValueChanged<double> onChanged;
+
+  const _SliderRow({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.displayValue,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '${vm.startYear}',
-              style: AppTextStyles.labelMedium.copyWith(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.onSurfaceVariant,
               ),
             ),
             Text(
-              '${vm.endYear}',
+              displayValue,
               style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: AppColors.neonLime,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 2),
         SliderTheme(
           data: SliderThemeData(
             activeTrackColor: AppColors.neonLime,
             inactiveTrackColor: AppColors.surfaceContainerHighest,
             thumbColor: AppColors.neonLime,
             overlayColor: AppColors.neonLime20,
-            trackHeight: 8,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
           ),
           child: Slider(
-            value: vm.sliderValue,
-            min: 0.0,
-            max: 1.0,
-            onChanged: (v) =>
-                context.read<SimulationViewModel>().setSliderValue(v),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'ADJUST TIMELINE',
-          style: AppTextStyles.labelSmall.copyWith(
-            color: AppColors.cyberBlueDim,
-            letterSpacing: 2.0,
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            onChanged: onChanged,
           ),
         ),
       ],

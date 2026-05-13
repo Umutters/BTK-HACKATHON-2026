@@ -224,7 +224,7 @@ class _TopHeader extends StatelessWidget {
         children: [
           // Brand name
           Text(
-            'FX COMMAND',
+            'KOMUT KONSOLU',
             style: AppTextStyles.displayMedium.copyWith(
               color: AppColors.neonLime,
               fontWeight: FontWeight.w800,

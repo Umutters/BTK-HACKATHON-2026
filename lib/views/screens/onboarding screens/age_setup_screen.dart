@@ -59,11 +59,11 @@ class _AgeSetupScreenState extends State<AgeSetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // ── FX COMMAND header ───────────────────────────────────────────
+            // ── KOMUT KONSOLU başlığı ────────────────────────────────────────
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AppDimensions.spaceXL),
               child: Text(
-                'FX COMMAND',
+                'KOMUT KONSOLU',
                 style: AppTextStyles.displayMedium,
                 textAlign: TextAlign.center,
               ),

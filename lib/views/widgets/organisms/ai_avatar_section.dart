@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../atoms/glowing_ring.dart';
 
-/// AI Oracle avatar with concentric neon rings and glass circle
+/// Eş merkezli neon halkalar ve cam daireyle kâhin avatarı
 class AiAvatarSection extends StatelessWidget {
   const AiAvatarSection({super.key});
 

@@ -96,7 +96,7 @@ class _UserSetupScreenState extends State<UserSetupScreen> {
   }
 }
 
-// ─── Oracle AI avatar circle ──────────────────────────────────────────────────
+// ─── Kâhin yapay zeka avatar çemberi ────────────────────────────────────────
 
 class _OracleAvatar extends StatelessWidget {
   const _OracleAvatar();
@@ -127,7 +127,7 @@ class _OracleAvatar extends StatelessWidget {
   }
 }
 
-// ─── "ORACLE SYSTEM ONLINE" badge ────────────────────────────────────────────
+// ─── "KÂHİN SİSTEMİ ÇEVRİMİÇİ" rozeti ───────────────────────────────────────
 
 class _SystemOnlineBadge extends StatelessWidget {
   const _SystemOnlineBadge();
@@ -144,7 +144,10 @@ class _SystemOnlineBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
         border: Border.all(color: AppColors.glass12),
       ),
-      child: const Text('ORACLE SYSTEM ONLİNE', style: AppTextStyles.labelCaps),
+      child: const Text(
+        'KÂHİN SİSTEMİ ÇEVRİMİÇİ',
+        style: AppTextStyles.labelCaps,
+      ),
     );
   }
 }

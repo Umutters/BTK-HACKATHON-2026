@@ -32,7 +32,7 @@ class SupabaseService {
     },
     {
       'id': 'q3',
-      'title': "Oracle'a Sor",
+      'title': 'Kâhine Sor',
       'description': 'AI danışmanına bir soru sor',
       'xp_reward': 100,
       'icon_name': 'oracle',
@@ -138,7 +138,7 @@ class SupabaseService {
         .toList();
   }
 
-  // ─── Daily Quests ───────────────────────────────────────────────────────
+  // ─── Günlük görevler ─────────────────────────────────────────────────────
 
   Future<List<QuestModel>> getOrCreateDailyQuests(String userId) async {
     final today = DateTime.now().toIso8601String().substring(0, 10);

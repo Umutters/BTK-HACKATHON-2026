@@ -1,3 +1,6 @@
+import '../data/models/daily_log_model.dart';
+import '../data/models/profile_model.dart';
+import '../data/models/recurring_transaction_model.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/datasources/supabase_datasource.dart';
@@ -41,6 +44,12 @@ class OracleViewModel extends ChangeNotifier {
   bool _isOracleTyping = false;
   bool _isInitialized = false;
   String? _initError;
+  bool _contextLoaded = false;
+
+  // Supabase'den çekilen veriyi cache'le — clearChat yeniden init edebilsin
+  ProfileModel? _cachedProfile;
+  List<RecurringTransactionModel> _cachedTransactions = [];
+  List<DailyLogModel> _cachedLogs = [];
 
   final GeminiService _gemini;
   final SupabaseDataSource _dataSource;
@@ -58,29 +67,43 @@ class OracleViewModel extends ChangeNotifier {
 
   Future<void> _initialize() async {
     try {
-      // Supabase başlatılmış ve kullanıcı giriş yapmışsa gerçek veri çek
       final userId = SupabaseService.instance.currentUserId;
       if (userId != null) {
         final profile = await _dataSource.getUserProfile();
         final transactions = await _dataSource.getRecurringTransactions();
-        final logs = await _dataSource.getRecentDailyLogs();
+        final logs = await _dataSource.getRecentDailyLogs(days: 30);
+
+        // Cache et
+        _cachedProfile = profile;
+        _cachedTransactions = transactions;
+        _cachedLogs = logs;
+
         await _gemini.initializeContext(
           profile: profile,
           transactions: transactions,
           recentLogs: logs,
         );
+        _contextLoaded = true;
+
+        final income = transactions
+            .where((t) => t.isIncome)
+            .fold(0.0, (s, t) => s + t.amount);
+        final expense = transactions
+            .where((t) => t.isExpense)
+            .fold(0.0, (s, t) => s + t.amount);
+
         _addOracleMessage(
-          'Merhaba ${profile.userName}! Finansal verilerini yükledim. '
-          'Güncel bakiyen **${profile.currentBalance.toStringAsFixed(0)} TL**, '
-          'tasarruf havuzun **${profile.savingsPool.toStringAsFixed(0)} TL**. '
-          'Ne öğrenmek istersin?',
+          'Merhaba **${profile.userName}**! Verilerini yükledim.\n'
+          '💰 Bakiye: **${profile.currentBalance.toStringAsFixed(0)} TL** | '
+          '🏦 Havuz: **${profile.savingsPool.toStringAsFixed(0)} TL** | '
+          '📊 Aylık net: **${(income - expense).toStringAsFixed(0)} TL**\n'
+          'Ne analiz edelim?',
           actionButtons: ['Günlük analiz yap', 'Tasarruf önerisi'],
         );
       } else {
         _seedFallbackMessages();
       }
     } catch (e) {
-      // Supabase başlatılmamış veya bağlantı hatası — mock moda geç
       _initError = e.toString();
       if (_messages.isEmpty) _seedFallbackMessages();
     } finally {
@@ -90,35 +113,10 @@ class OracleViewModel extends ChangeNotifier {
   }
 
   void _seedFallbackMessages() {
-    _messages.addAll([
-      ChatMessage(
-        id: 'oracle_01',
-        text:
-            'Güncel volatilite trendlerini analiz ediyorum. **Cyber-Equity** sektöründe asimetrik bir fırsat tespit ettim. Risk-parite simülasyonu çalıştırmak ister misiniz?',
-        sender: MessageSender.oracle,
-        timestamp: DateTime(2026, 5, 11, 14, 2),
-        actionButtons: ['Simülasyonu Çalıştır', 'Piyasa Derin Analizi'],
-      ),
-      ChatMessage(
-        id: 'user_01',
-        text:
-            'Q3 genişlemesi için mevcut konsolidasyon aşamasını kullanırsak potansiyel ROI\'yi göster.',
-        sender: MessageSender.user,
-        timestamp: DateTime(2026, 5, 11, 14, 5),
-      ),
-      ChatMessage(
-        id: 'oracle_02',
-        text:
-            'Projeksiyon tamamlandı. Mevcut trend devam ederse beklenen yıllık getiri **%18-22** aralığında.',
-        sender: MessageSender.oracle,
-        timestamp: DateTime(2026, 5, 11, 14, 8),
-        dataCard: const DataCard(
-          label: 'TAHMİNİ GETİRİ',
-          value: '+24.8%',
-          progress: 0.62,
-        ),
-      ),
-    ]);
+    _addOracleMessage(
+      'Merhaba! Finansal verilerini analiz etmeye hazırım. Ne öğrenmek istersin?',
+      actionButtons: ['Günlük analiz yap', 'Tasarruf önerisi'],
+    );
   }
 
   void _addOracleMessage(
@@ -136,6 +134,56 @@ class OracleViewModel extends ChangeNotifier {
         dataCard: dataCard,
       ),
     );
+  }
+
+  void clearChat() {
+    _messages.clear();
+    notifyListeners();
+    // Supabase'den taze veri çek ve Gemini'yi yeniden başlat
+    _reinitialize();
+  }
+
+  Future<void> _reinitialize() async {
+    try {
+      final userId = SupabaseService.instance.currentUserId;
+      if (userId != null) {
+        final profile = await _dataSource.getUserProfile();
+        final transactions = await _dataSource.getRecurringTransactions();
+        final logs = await _dataSource.getRecentDailyLogs(days: 30);
+
+        _cachedProfile = profile;
+        _cachedTransactions = transactions;
+        _cachedLogs = logs;
+
+        await _gemini.initializeContext(
+          profile: profile,
+          transactions: transactions,
+          recentLogs: logs,
+        );
+        _contextLoaded = true;
+
+        final income = transactions
+            .where((t) => t.isIncome)
+            .fold(0.0, (s, t) => s + t.amount);
+        final expense = transactions
+            .where((t) => t.isExpense)
+            .fold(0.0, (s, t) => s + t.amount);
+
+        _addOracleMessage(
+          'Sohbet sıfırlandı. Güncel verilerini yeniden yükledim.\n'
+          '💰 **${profile.currentBalance.toStringAsFixed(0)} TL** bakiye | '
+          '🏦 **${profile.savingsPool.toStringAsFixed(0)} TL** havuz | '
+          '📊 **${(income - expense).toStringAsFixed(0)} TL** aylık net',
+          actionButtons: ['Günlük analiz yap', 'Tasarruf önerisi'],
+        );
+      } else {
+        _seedFallbackMessages();
+      }
+    } catch (e) {
+      _seedFallbackMessages();
+    } finally {
+      notifyListeners();
+    }
   }
 
   Future<void> sendMessage(String text) async {
@@ -157,7 +205,7 @@ class OracleViewModel extends ChangeNotifier {
       _addOracleMessage(response);
       // Kararı decisions_log tablosuna kaydet — hata olsa da mesajı etkilemesin
       _dataSource
-          .logDecision(actionTaken: 'Oracle: $text', xpGained: 0)
+          .logDecision(actionTaken: 'Kahin: $text', xpGained: 0)
           .catchError((_) {});
     } catch (e) {
       _addOracleMessage('Yanıt alınamadı: ${e.toString()}');

@@ -94,7 +94,7 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       title: Text(
-        name != null ? 'Merhaba, $name' : 'FortuneFlow AI',
+        name != null ? 'Merhaba, $name' : 'FortuneFlow Yapay Zeka',
         style: AppTextStyles.appBarTitle,
       ),
       actions: [
@@ -138,7 +138,7 @@ class _ErrorView extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.pagePaddingH),
         child: Text(
-          message ?? 'An error occurred',
+          message ?? 'Bir hata oluştu',
           style: AppTextStyles.bodyLarge,
           textAlign: TextAlign.center,
         ),
@@ -203,7 +203,7 @@ class _LoadedView extends StatelessWidget {
               horizontal: AppDimensions.pagePaddingH,
             ),
             child: FfButton(
-              label: 'Consult AI Oracle',
+              label: 'Yapay Zeka Asistanına Geç',
               onTap: () {
                 context.read<NavigationViewModel>().setIndex(1);
               },

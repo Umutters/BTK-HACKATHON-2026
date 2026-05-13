@@ -97,7 +97,7 @@ class FortuneFlowApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => UserSetupViewModel(),
       child: MaterialApp(
-        title: 'FortuneFlow AI',
+        title: 'FortuneFlow Yapay Zeka',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
         home: onboardingDone

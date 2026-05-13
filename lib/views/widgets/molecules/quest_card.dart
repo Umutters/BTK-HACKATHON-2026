@@ -64,9 +64,9 @@ class QuestCard extends StatelessWidget {
   }
 
   String _label(QuestStatus s) => switch (s) {
-    QuestStatus.inProgress => 'IN PROGRESS',
-    QuestStatus.completed => 'COMPLETED',
-    QuestStatus.notStarted => 'START QUEST',
+    QuestStatus.inProgress => 'DEVAM EDİYOR',
+    QuestStatus.completed => 'TAMAMLANDI',
+    QuestStatus.notStarted => 'GÖREVE BAŞLA',
   };
 }
 

@@ -46,7 +46,7 @@ class LocalDataSource {
     ),
     QuestModel(
       id: 'q3',
-      title: "Oracle'a Sor",
+      title: 'Kâhine Sor',
       description: 'AI danışmanına bir soru sor',
       xpReward: 100,
       status: 'notStarted',

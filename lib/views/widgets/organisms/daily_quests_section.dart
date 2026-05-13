@@ -26,8 +26,8 @@ class DailyQuestsSection extends StatelessWidget {
             horizontal: AppDimensions.pagePaddingH,
           ),
           child: SectionHeader(
-            title: 'Daily Quests',
-            subtitle: '$completedCount/${quests.length} COMPLETED',
+            title: 'Günlük Görevler',
+            subtitle: '$completedCount/${quests.length} TAMAMLANDI',
           ),
         ),
         const SizedBox(height: AppDimensions.spaceL),

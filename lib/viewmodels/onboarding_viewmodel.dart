@@ -29,36 +29,36 @@ class OnboardingViewModel extends ChangeNotifier {
 
   static const List<OnboardingPageData> pages = [
     OnboardingPageData(
-      title: 'Welcome to\nFortuneFlow AI',
+      title: 'FortuneFlow\nYapay Zeka\'ya Hoş Geldin',
       description:
-          'Transform your financial journey into an epic quest. Earn XP, level up, and conquer your money goals.',
+          'Finans yolculuğunu destansı bir göreve dönüştür. XP kazan, seviye atla ve para hedeflerini fethet.',
       icon: Icons.bolt_rounded,
       accent: AppColors.neonLime,
       accentSoft: AppColors.neonLime10,
       accentGlow: AppColors.neonLime30,
     ),
     OnboardingPageData(
-      title: 'Complete\nDaily Quests',
+      title: 'Günlük\nGörevleri Tamamla',
       description:
-          'Every smart financial move earns XP. Save money, analyse your portfolio, and learn to invest — all rewarded.',
+          'Her akıllı finans hamlesi XP kazandırır. Para biriktir, portföyünü analiz et ve yatırım yapmayı öğren; hepsi ödüllendirilir.',
       icon: Icons.military_tech_rounded,
       accent: AppColors.cyberBlue,
       accentSoft: AppColors.cyberBlue10,
       accentGlow: AppColors.cyberBlue30,
     ),
     OnboardingPageData(
-      title: 'Your AI\nOracle Awaits',
+      title: 'Yapay Zeka\nKâhini Seni Bekliyor',
       description:
-          'Get personalised financial insights powered by advanced AI. Ask anything, receive real-time guidance.',
+          'Gelişmiş yapay zeka ile kişiselleştirilmiş finans içgörüleri al. İstediğini sor, anlık yönlendirme al.',
       icon: Icons.smart_toy_rounded,
       accent: AppColors.cyberMagenta,
       accentSoft: AppColors.cyberMagenta20,
       accentGlow: AppColors.cyberMagenta30,
     ),
     OnboardingPageData(
-      title: 'Ready to\nLevel Up?',
+      title: 'Seviye Atlamaya\nHazır mısın?',
       description:
-          'Join the next generation of investors who turned financial stress into financial power.',
+          'Finansal stresi finansal güce dönüştüren yeni nesil yatırımcıların arasına katıl.',
       icon: Icons.rocket_launch_rounded,
       accent: AppColors.neonLime,
       accentSoft: AppColors.neonLime10,

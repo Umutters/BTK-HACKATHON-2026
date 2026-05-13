@@ -33,6 +33,10 @@ class SimulationScreen extends StatelessWidget {
                   _ProjectionChartCard(vm: vm),
                   const SizedBox(height: 16),
                   _AiInsightCard(vm: vm),
+                  const SizedBox(height: 16),
+                  _TransactionBreakdownCard(vm: vm),
+                  const SizedBox(height: 16),
+                  _ProjectionTableCard(vm: vm),
                   const SizedBox(height: 28),
                   _TimelineSlider(vm: vm),
                   const SizedBox(height: 24),
@@ -324,14 +328,6 @@ class _AiInsightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final insight = vm.aiInsight;
-    final goalYearStr = vm.aiGoalYear.toString();
-
-    // Split insight around the goal year to highlight it
-    final idx = insight.indexOf(goalYearStr);
-    final before = idx >= 0 ? insight.substring(0, idx) : insight;
-    final after = idx >= 0 ? insight.substring(idx + goalYearStr.length) : '';
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppDimensions.spaceXL),
@@ -340,45 +336,67 @@ class _AiInsightCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppDimensions.radiusL),
         border: Border.all(color: AppColors.glass12),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sparkle icon container
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.cyberBlue10,
-              border: Border.all(color: AppColors.cyberBlue15),
-            ),
-            child: const Icon(
-              Icons.auto_awesome_rounded,
-              color: AppColors.cyberBlue,
-              size: 20,
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.cyberBlue10,
+                  border: Border.all(color: AppColors.cyberBlue15),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: AppColors.cyberBlue,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spaceS),
+              Text(
+                'AI ORACLE',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.cyberBlueDim,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          Text(
+            vm.aiInsight,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.onSurface,
+              fontFamily: 'Outfit',
+              height: 1.6,
             ),
           ),
-          const SizedBox(width: AppDimensions.spaceL),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.onSurface,
-                  fontFamily: 'Outfit',
-                  height: 1.5,
-                ),
-                children: [
-                  TextSpan(text: '"$before'),
-                  if (idx >= 0)
-                    TextSpan(
-                      text: goalYearStr,
-                      style: const TextStyle(
-                        color: AppColors.neonLime,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  if (idx >= 0) TextSpan(text: '$after"'),
-                ],
+          const SizedBox(height: AppDimensions.spaceL),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: vm.isGeneratingAi
+                  ? null
+                  : () =>
+                        context.read<SimulationViewModel>().generateAiInsight(),
+              icon: vm.isGeneratingAi
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_awesome_rounded, size: 16),
+              label: Text(
+                vm.isGeneratingAi ? 'Uretiliyor...' : 'AI Yorumu Guncelle',
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.cyberBlue),
+                foregroundColor: AppColors.cyberBlue,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                textStyle: AppTextStyles.labelMedium,
               ),
             ),
           ),
@@ -386,6 +404,199 @@ class _AiInsightCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TransactionBreakdownCard extends StatelessWidget {
+  final SimulationViewModel vm;
+  const _TransactionBreakdownCard({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = vm.transactionImpacts.take(5).toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spaceL),
+      decoration: BoxDecoration(
+        color: AppColors.glass08,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+        border: Border.all(color: AppColors.glass12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TRANSACTION ETKI TABLOSU',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.cyberBlueDim,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          if (rows.isEmpty)
+            Text(
+              'Tablo icin yeterli transaction verisi yok.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          if (rows.isNotEmpty)
+            ...rows.map(
+              (r) => Padding(
+                padding: const EdgeInsets.only(bottom: AppDimensions.spaceM),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        r.category,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.onSurface,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        _formatTl(r.monthlyImpact),
+                        textAlign: TextAlign.right,
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: r.monthlyImpact >= 0
+                              ? AppColors.neonLime
+                              : AppColors.cyberMagenta,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        '${r.sharePercent.toStringAsFixed(0)}%',
+                        textAlign: TextAlign.right,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectionTableCard extends StatelessWidget {
+  final SimulationViewModel vm;
+  const _ProjectionTableCard({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = vm.projectionRows;
+    final sampledRows = rows
+        .where((r) => (r.year - vm.startYear) % 2 == 0)
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spaceL),
+      decoration: BoxDecoration(
+        color: AppColors.glass08,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+        border: Border.all(color: AppColors.glass12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'HEDEF TAHMIN TABLOSU',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.cyberBlueDim,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'YIL',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'PORTFOY',
+                  textAlign: TextAlign.right,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'HEDEF ACIGI',
+                  textAlign: TextAlign.right,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spaceS),
+          ...sampledRows
+              .take(6)
+              .map(
+                (row) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppDimensions.spaceS),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${row.year}',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.onSurface,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${row.projectedMillions.toStringAsFixed(2)}M',
+                          textAlign: TextAlign.right,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.neonLime,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${row.goalGapMillions.toStringAsFixed(2)}M',
+                          textAlign: TextAlign.right,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: row.goalGapMillions > 0
+                                ? AppColors.cyberMagenta
+                                : AppColors.neonLime,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatTl(double value) {
+  final sign = value >= 0 ? '+' : '-';
+  final absValue = value.abs();
+  return '$sign${absValue.toStringAsFixed(0)} TL';
 }
 
 // ─── Timeline Slider ──────────────────────────────────────────────────────────

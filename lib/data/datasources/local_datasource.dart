@@ -16,6 +16,8 @@ class LocalDataSource {
   static const _dailyLogsKey = 'ldb_daily_logs';
   static const _questStatusKey = 'ldb_quest_status';
   static const _onboardingDoneKey = 'ldb_onboarding_done';
+  static const _goalIdKey = 'ldb_goal_id';
+  static const _goalNameKey = 'ldb_goal_name';
 
   /// main.dart'ta önceden başlatılır.
   static SharedPreferences? sharedPrefs;
@@ -137,6 +139,23 @@ class LocalDataSource {
     return prefs.getBool(_onboardingDoneKey) ?? false;
   }
 
+  Future<void> saveSelectedGoal({
+    required String goalId,
+    required String goalName,
+  }) async {
+    final prefs = await _prefs;
+    await prefs.setString(_goalIdKey, goalId);
+    await prefs.setString(_goalNameKey, goalName);
+  }
+
+  Future<Map<String, String>> getSelectedGoal() async {
+    final prefs = await _prefs;
+    return {
+      'goalId': prefs.getString(_goalIdKey) ?? '',
+      'goalName': prefs.getString(_goalNameKey) ?? '',
+    };
+  }
+
   // ─── Recurring Transactions ───────────────────────────────────────────────
 
   Future<List<RecurringTransactionModel>> getRecurringTransactions() async {
@@ -247,6 +266,8 @@ class LocalDataSource {
       prefs.remove(_dailyLogsKey),
       prefs.remove(_questStatusKey),
       prefs.remove(_onboardingDoneKey),
+      prefs.remove(_goalIdKey),
+      prefs.remove(_goalNameKey),
     ]);
   }
 }

@@ -160,9 +160,7 @@ class OracleViewModel extends ChangeNotifier {
           .logDecision(actionTaken: 'Oracle: $text', xpGained: 0)
           .catchError((_) {});
     } catch (e) {
-      _addOracleMessage(
-        'Yanıt alınamadı: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e.toString()}',
-      );
+      _addOracleMessage('Yanıt alınamadı: ${e.toString()}');
     } finally {
       _isOracleTyping = false;
       notifyListeners();

@@ -65,6 +65,9 @@ class _NavigationShell extends StatelessWidget {
       homeVm.applyTransactionDelta(result.balanceDelta);
       await homeVm.processSavingsTransfer(result.transferredToSavings);
       await homeVm.refreshTransactions();
+
+      // Simulasyon ekrani acildiginda en guncel transaction etkisini gostersin.
+      await context.read<SimulationViewModel>().refresh();
     }
   }
 

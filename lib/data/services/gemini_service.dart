@@ -5,7 +5,7 @@ import '../models/daily_log_model.dart';
 import '../models/profile_model.dart';
 import '../models/recurring_transaction_model.dart';
 
-/// Gemini 2.0 Flash ile Oracle AI chatbot sohbeti yönetir.
+/// Gemini 2.5 Flash ile Oracle AI chatbot sohbeti yönetir.
 /// Her [GeminiService] örneği bağımsız bir sohbet geçmişi tutar.
 class GeminiService {
   late final GenerativeModel _model;
@@ -13,11 +13,17 @@ class GeminiService {
 
   GeminiService() {
     _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       apiKey: AppEnv.geminiApiKey,
       generationConfig: GenerationConfig(
-        temperature: 0.8,
-        maxOutputTokens: 512,
+        temperature: 0.75,
+        maxOutputTokens: 1000,
+        topP: 0.95,
+      ),
+      systemInstruction: Content.system(
+        '''Sen FortuneFlow AI Oracle'sın — kişisel finans uzmanı, bilge bir asistan.
+Kullanıcıya samimi, net ve XAI (Açıklanabilir AI) odaklı yanıtlar ver. 
+Yanıtların 2-4 cümle olsun. Karmaşık finansal durumları metaforlarla açıkla. ''',
       ),
     );
     _chat = _model.startChat();
@@ -46,8 +52,88 @@ class GeminiService {
     if (AppEnv.geminiApiKey.isEmpty) {
       return _demoResponse(userMessage);
     }
-    final response = await _chat.sendMessage(Content.text(userMessage));
-    return response.text ?? 'Yanıt alınamadı, lütfen tekrar deneyin.';
+    try {
+      final response = await _chat.sendMessage(Content.text(userMessage));
+      return response.text ?? 'Yanıt alınamadı, lütfen tekrar deneyin.';
+    } catch (e) {
+      final raw = e.toString();
+      final lower = raw.toLowerCase();
+
+      // API kaynaklı hataları kullanıcıya net bir dille ilet.
+      if (lower.contains('api key expired') ||
+          lower.contains('invalid api key') ||
+          lower.contains('unauthenticated') ||
+          lower.contains('permission denied')) {
+        return 'Gemini anahtarı geçersiz veya süresi dolmuş görünüyor. Lütfen yeni anahtar üretip uygulamayı tamamen yeniden başlat.';
+      }
+
+      if (lower.contains('quota') ||
+          lower.contains('resource exhausted') ||
+          lower.contains('rate limit') ||
+          lower.contains('too many requests') ||
+          lower.contains('(429)') ||
+          lower.contains(' 429 ')) {
+        return 'Gemini kotası dolmuş görünüyor. Bir süre bekleyip tekrar dene veya plan/kota ayarlarını kontrol et.';
+      }
+
+      if (lower.contains('network') ||
+          lower.contains('socket') ||
+          lower.contains('timed out')) {
+        return 'Ağ bağlantısında sorun var. İnternet bağlantını kontrol edip tekrar dene.';
+      }
+
+      return 'Gemini yanıtı alınamadı. Teknik detay: $raw';
+    }
+  }
+
+  Future<String> generateSimulationInsight({
+    required ProfileModel profile,
+    required List<RecurringTransactionModel> transactions,
+    required List<DailyLogModel> recentLogs,
+    required String goalName,
+    required double goalMillions,
+    required int goalYear,
+    required double projectedMillions,
+    required double monthlySurplus,
+    required List<String> topDrivers,
+  }) async {
+    if (AppEnv.geminiApiKey.isEmpty) {
+      return _demoSimulationInsight(
+        goalName: goalName,
+        goalYear: goalYear,
+        projectedMillions: projectedMillions,
+        monthlySurplus: monthlySurplus,
+      );
+    }
+
+    await initializeContext(
+      profile: profile,
+      transactions: transactions,
+      recentLogs: recentLogs,
+    );
+
+    final topDriverText = topDrivers.isEmpty
+        ? '- Belirgin transaction etkisi bulunamadı.'
+        : topDrivers.map((d) => '- $d').join('\n');
+
+    final prompt =
+        '''
+Simülasyon özeti:
+- Hedef: $goalName (${goalMillions.toStringAsFixed(2)}M)
+- Tahmini varış yılı: $goalYear
+- Seçili yılda beklenen portföy: ${projectedMillions.toStringAsFixed(2)}M
+- Aylık net surplus: ${monthlySurplus.toStringAsFixed(0)} TL
+
+En etkili transaction kalemleri:
+$topDriverText
+
+Lütfen Türkçe ve kısa cevap ver:
+1) En kritik 2 aksiyon,
+2) Hedefi hızlandırmak için 1 somut sayı önerisi,
+3) 1 risk uyarısı.
+''';
+
+    return sendMessage(prompt);
   }
 
   String _demoResponse(String input) {
@@ -65,6 +151,16 @@ class GeminiService {
       return 'Yatırım kararı vermeden önce en az 3 aylık acil fon oluşturmanı öneririm. Güvenli zemin olmadan risk almak sermayeyi eritebilir.';
     }
     return 'Finansal durumunu analiz ediyorum. Simülasyon ekranından 20 yıllık projeksiyon görüntüleyebilir, farklı senaryolar deneyebilirsin.';
+  }
+
+  String _demoSimulationInsight({
+    required String goalName,
+    required int goalYear,
+    required double projectedMillions,
+    required double monthlySurplus,
+  }) {
+    final trend = monthlySurplus >= 0 ? 'pozitif' : 'negatif';
+    return '$goalName hedefi için mevcut trend $trend görünüyor. Bu gidişle $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M seviyesine ulaşma potansiyelin var. Hedefe daha hızlı gitmek için aylık net katkını en az 1000 TL artırmayı dene.';
   }
 
   String _buildSystemContext({

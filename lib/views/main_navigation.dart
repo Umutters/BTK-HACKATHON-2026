@@ -11,6 +11,7 @@ import '../domain/usecases/get_user_progress_usecase.dart';
 import '../domain/usecases/start_quest_usecase.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../viewmodels/navigation_viewmodel.dart';
+import '../viewmodels/recurring_rules_viewmodel.dart';
 import '../viewmodels/simulation_viewmodel.dart';
 import 'screens/ai_oracle_screen.dart';
 import 'screens/home_screen.dart';
@@ -40,6 +41,7 @@ class MainNavigation extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(create: (_) => SimulationViewModel()),
+        ChangeNotifierProvider(create: (_) => RecurringRulesViewModel()),
       ],
       child: const _NavigationShell(),
     );

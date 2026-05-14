@@ -11,6 +11,7 @@ import 'data/services/supabase_service.dart';
 import 'viewmodels/user_setup_viewmodel.dart';
 import 'views/main_navigation.dart';
 import 'views/screens/onboarding screens/onboarding_screen.dart';
+import 'views/screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,9 +101,11 @@ class FortuneFlowApp extends StatelessWidget {
         title: 'FortuneFlow Yapay Zeka',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
-        home: onboardingDone
-            ? const MainNavigation()
-            : const OnboardingScreen(),
+        home: SplashScreen(
+          nextScreen: onboardingDone
+              ? const MainNavigation()
+              : const OnboardingScreen(),
+        ),
       ),
     );
   }

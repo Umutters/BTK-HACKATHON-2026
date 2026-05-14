@@ -5,6 +5,7 @@ import '../models/daily_log_model.dart';
 import '../models/decision_log_model.dart';
 import '../models/profile_model.dart';
 import '../models/quest_model.dart';
+import '../models/recurring_rule_model.dart';
 import '../models/recurring_transaction_model.dart';
 
 /// Supabase istemcisine merkezi erişim sağlar.
@@ -382,6 +383,66 @@ class SupabaseService {
     return (data as List)
         .map((e) => DecisionLogModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ─── Recurring Rules ──────────────────────────────────────────────────────
+
+  Future<List<RecurringRuleModel>> getRecurringRules(String userId) async {
+    final data = await _client
+        .from('recurring_rules')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+    return (data as List)
+        .map((e) => RecurringRuleModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<RecurringRuleModel> insertRecurringRule(
+    RecurringRuleModel rule,
+  ) async {
+    final payload = rule.toJson()..remove('id');
+    final inserted = await _client
+        .from('recurring_rules')
+        .insert(payload)
+        .select()
+        .single();
+    return RecurringRuleModel.fromJson(inserted as Map<String, dynamic>);
+  }
+
+  Future<void> updateRecurringRule(RecurringRuleModel rule) async {
+    final payload = rule.toJson()
+      ..remove('id')
+      ..remove('user_id')
+      ..remove('created_at');
+    await _client
+        .from('recurring_rules')
+        .update(payload)
+        .eq('id', rule.id)
+        .eq('user_id', rule.userId);
+  }
+
+  Future<void> deleteRecurringRule(String ruleId, String userId) async {
+    await _client
+        .from('recurring_rules')
+        .delete()
+        .eq('id', ruleId)
+        .eq('user_id', userId);
+  }
+
+  /// Vadesi gelen aktif kuralları bugüne uygular.
+  /// Her kural için balanceyi günceller ve `last_applied_date`'i set eder.
+  /// Çağıran, dönen delta listesini HomeViewModel'a iletebilir.
+  Future<double> applyDueRules(String userId) async {
+    try {
+      final result = await _client.rpc(
+        'apply_due_recurring_rules',
+        params: {'p_user_id': userId},
+      );
+      return (result as num?)?.toDouble() ?? 0.0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   // ─── Auth Helpers ─────────────────────────────────────────────────────────

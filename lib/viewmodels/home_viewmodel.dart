@@ -81,6 +81,22 @@ class HomeViewModel extends ChangeNotifier {
         _currentBalance = 0;
         _savingsPool = 0;
       }
+
+      // Auto-apply any due recurring rules
+      if (userId != null) {
+        try {
+          final delta = await SupabaseService.instance.applyDueRules(userId);
+          if (delta != 0) {
+            _currentBalance = (_currentBalance + delta).clamp(
+              0.0,
+              double.maxFinite,
+            );
+          }
+        } catch (_) {
+          // Best-effort: don't fail initialization if auto-apply errors
+        }
+      }
+
       _state = HomeViewState.loaded;
     } catch (e) {
       _errorMessage = e.toString();

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/daily_log_model.dart';
 import '../models/profile_model.dart';
 import '../models/quest_model.dart';
+import '../models/recurring_rule_model.dart';
 import '../models/recurring_transaction_model.dart';
 import '../models/user_model.dart';
 
@@ -13,6 +14,7 @@ import '../models/user_model.dart';
 class LocalDataSource {
   static const _profileKey = 'ldb_profile';
   static const _transactionsKey = 'ldb_transactions';
+  static const _rulesKey = 'ldb_recurring_rules';
   static const _dailyLogsKey = 'ldb_daily_logs';
   static const _questStatusKey = 'ldb_quest_status';
   static const _onboardingDoneKey = 'ldb_onboarding_done';
@@ -204,6 +206,45 @@ class LocalDataSource {
     await saveRecurringTransactions(list);
   }
 
+  // ─── Recurring Rules ──────────────────────────────────────────────────────
+
+  Future<List<RecurringRuleModel>> getRecurringRules() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_rulesKey);
+    if (json == null) return [];
+    final list = jsonDecode(json) as List;
+    return list
+        .map((e) => RecurringRuleModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> saveRecurringRules(List<RecurringRuleModel> rules) async {
+    final prefs = await _prefs;
+    await prefs.setString(
+      _rulesKey,
+      jsonEncode(rules.map((r) => r.toJson()).toList()),
+    );
+  }
+
+  Future<void> addRecurringRule(RecurringRuleModel rule) async {
+    final list = await getRecurringRules();
+    list.add(rule);
+    await saveRecurringRules(list);
+  }
+
+  Future<void> updateRecurringRule(RecurringRuleModel updated) async {
+    final list = await getRecurringRules();
+    final idx = list.indexWhere((r) => r.id == updated.id);
+    if (idx >= 0) list[idx] = updated;
+    await saveRecurringRules(list);
+  }
+
+  Future<void> deleteRecurringRule(String id) async {
+    final list = await getRecurringRules();
+    list.removeWhere((r) => r.id == id);
+    await saveRecurringRules(list);
+  }
+
   // ─── Daily Logs ───────────────────────────────────────────────────────────
 
   Future<List<DailyLogModel>> getRecentDailyLogs({int days = 7}) async {
@@ -263,6 +304,7 @@ class LocalDataSource {
     await Future.wait([
       prefs.remove(_profileKey),
       prefs.remove(_transactionsKey),
+      prefs.remove(_rulesKey),
       prefs.remove(_dailyLogsKey),
       prefs.remove(_questStatusKey),
       prefs.remove(_onboardingDoneKey),

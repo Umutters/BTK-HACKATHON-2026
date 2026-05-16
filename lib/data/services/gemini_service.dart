@@ -3,6 +3,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../core/constants/app_env.dart';
 import '../models/daily_log_model.dart';
 import '../models/profile_model.dart';
+import '../models/recurring_rule_model.dart';
 import '../models/recurring_transaction_model.dart';
 
 /// Gemini 2.5 Flash ile kâhin sohbetini yönetir.
@@ -20,7 +21,7 @@ class GeminiService {
         apiKey: AppEnv.geminiApiKey,
         generationConfig: GenerationConfig(
           temperature: 0.7,
-          maxOutputTokens: 1200,
+          maxOutputTokens: 2048,
           topP: 0.95,
         ),
         systemInstruction: Content.system(_baseInstruction),
@@ -37,11 +38,15 @@ class GeminiService {
     required ProfileModel profile,
     required List<RecurringTransactionModel> transactions,
     required List<DailyLogModel> recentLogs,
+    List<RecurringRuleModel> rules = const [],
+    String goalName = '',
   }) async {
     final systemInstruction = _buildSystemInstruction(
       profile: profile,
       transactions: transactions,
       recentLogs: recentLogs,
+      rules: rules,
+      goalName: goalName,
     );
 
     // Gerçek kullanıcı verisiyle yeni bir model + chat oturumu aç
@@ -50,7 +55,7 @@ class GeminiService {
       apiKey: AppEnv.geminiApiKey,
       generationConfig: GenerationConfig(
         temperature: 0.7,
-        maxOutputTokens: 1200,
+        maxOutputTokens: 2048,
         topP: 0.95,
       ),
       systemInstruction: Content.system(systemInstruction),
@@ -88,6 +93,13 @@ class GeminiService {
         return 'Gemini kotası dolmuş görünüyor. Bir süre bekleyip tekrar dene veya plan/kota ayarlarını kontrol et.';
       }
 
+      if (lower.contains('503') ||
+          lower.contains('unavailable') ||
+          lower.contains('high demand') ||
+          lower.contains('service unavailable')) {
+        return 'Gemini şu an yoğun talep nedeniyle geçici olarak yanıt veremiyor. Birkaç saniye bekleyip tekrar dene.';
+      }
+
       if (lower.contains('network') ||
           lower.contains('socket') ||
           lower.contains('timed out')) {
@@ -95,6 +107,127 @@ class GeminiService {
       }
 
       return 'Gemini yanıtı alınamadı. Teknik detay: $raw';
+    }
+  }
+
+  /// Action butonları için: tüm verileri prompt içine gömer, doğrudan
+  /// gemini-2.0-flash generateContent çağırır — chat session'a bağımlı değil.
+  Future<String> generateDirectAnalysis({
+    required ProfileModel profile,
+    required List<RecurringTransactionModel> transactions,
+    required List<DailyLogModel> recentLogs,
+    required List<RecurringRuleModel> rules,
+    required String goalName,
+    required String question,
+  }) async {
+    if (AppEnv.geminiApiKey.isEmpty) return _demoResponse(question);
+
+    final income = transactions
+        .where((t) => t.isIncome)
+        .fold(0.0, (s, t) => s + t.amount);
+    final expense = transactions
+        .where((t) => t.isExpense)
+        .fold(0.0, (s, t) => s + t.amount);
+    final savings = transactions
+        .where((t) => t.isSaving)
+        .fold(0.0, (s, t) => s + t.amount);
+    final net = income - expense - savings;
+
+    final expenseLines = transactions
+        .where((t) => t.isExpense)
+        .map((t) => '  ${t.category}: ${t.amount.toStringAsFixed(0)} TL/ay')
+        .join('\n');
+    final incomeLines = transactions
+        .where((t) => t.isIncome)
+        .map((t) => '  ${t.category}: ${t.amount.toStringAsFixed(0)} TL/ay')
+        .join('\n');
+
+    final sortedLogs = [...recentLogs]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final avgDaily = sortedLogs.isNotEmpty
+        ? sortedLogs.fold(0.0, (s, l) => s + l.spentAmount) / sortedLogs.length
+        : 0.0;
+    final overLimit = sortedLogs
+        .where((l) => l.spentAmount > profile.dailyLimit)
+        .length;
+    final logSummary = sortedLogs
+        .take(10)
+        .map((l) {
+          final flag = l.spentAmount > profile.dailyLimit
+              ? ' [LİMİT AŞILDI]'
+              : '';
+          return '  ${l.date.day}/${l.date.month}: ${l.spentAmount.toStringAsFixed(0)} TL$flag';
+        })
+        .join('\n');
+
+    final activeRules = rules.where((r) => r.isActive).toList();
+    final ruleExpLines = activeRules
+        .where((r) => r.isExpense)
+        .map(
+          (r) =>
+              '  ${r.category}${r.description != null && r.description!.isNotEmpty ? " (${r.description})" : ""}: ${r.amount.toStringAsFixed(0)} TL/${_freqLabel(r.frequency)}',
+        )
+        .join('\n');
+    final ruleIncLines = activeRules
+        .where((r) => r.isIncome)
+        .map(
+          (r) =>
+              '  ${r.category}: ${r.amount.toStringAsFixed(0)} TL/${_freqLabel(r.frequency)}',
+        )
+        .join('\n');
+
+    final prompt =
+        '''Sen FortuneFlow kişisel finans AI asistanısın. YALNIZCA aşağıdaki gerçek verilere dayanarak Türkçe yanıt ver. Genel tavsiye VERME, sadece bu kullanıcının rakamlarını kullan.
+
+KULLANICI: ${profile.userName} | Bakiye: ${profile.currentBalance.toStringAsFixed(0)} TL | Tasarruf havuzu: ${profile.savingsPool.toStringAsFixed(0)} TL | Günlük limit: ${profile.dailyLimit.toStringAsFixed(0)} TL
+Aylık gelir: ${income.toStringAsFixed(0)} TL | Aylık gider: ${expense.toStringAsFixed(0)} TL | Aylık tasarruf kesintisi: ${savings.toStringAsFixed(0)} TL | Net aylık fazla: ${net.toStringAsFixed(0)} TL
+${goalName.isNotEmpty ? 'Hedef: $goalName' : ''}
+
+GELİR KALEMLERİ:
+${incomeLines.isEmpty ? '  (kayıt yok)' : incomeLines}
+
+GİDER KALEMLERİ:
+${expenseLines.isEmpty ? '  (kayıt yok)' : expenseLines}
+
+SON ${sortedLogs.length} GÜN GÜNLÜK HARCAMA (limit: ${profile.dailyLimit.toStringAsFixed(0)} TL/gün):
+Ortalama: ${avgDaily.toStringAsFixed(0)} TL/gün | Limit aşan gün sayısı: $overLimit
+${logSummary.isEmpty ? '  (log yok)' : logSummary}
+
+${activeRules.isNotEmpty ? '''DÜZENLİ GELİR KURALLARI:
+${ruleIncLines.isEmpty ? '  (yok)' : ruleIncLines}
+
+DÜZENLİ GİDER KURALLARI:
+${ruleExpLines.isEmpty ? '  (yok)' : ruleExpLines}''' : ''}
+
+SORU: $question
+
+KURAL: Yanıtta sadece bu kullanıcının TL rakamlarını kullan. Markdown yıldız (*) kullanma. 3-5 cümle, her cümlede somut sayı olsun.''';
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: AppEnv.geminiApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.5,
+          maxOutputTokens: 2800,
+          topP: 0.9,
+        ),
+      );
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text;
+      if (text == null || text.trim().isEmpty) return _demoResponse(question);
+      return text.trim();
+    } catch (e) {
+      final raw = e.toString().toLowerCase();
+      if (raw.contains('503') ||
+          raw.contains('unavailable') ||
+          raw.contains('high demand')) {
+        return 'Gemini şu an yoğun talep nedeniyle geçici olarak yanıt veremiyor. Birkaç saniye bekleyip tekrar dene.';
+      }
+      if (raw.contains('quota') || raw.contains('429')) {
+        return 'Gemini kotası dolmuş görünüyor. Bir süre bekleyip tekrar dene.';
+      }
+      return _demoResponse(question);
     }
   }
 
@@ -118,34 +251,69 @@ class GeminiService {
       );
     }
 
-    await initializeContext(
-      profile: profile,
-      transactions: transactions,
-      recentLogs: recentLogs,
-    );
-
     final topDriverText = topDrivers.isEmpty
-        ? '- Belirgin transaction etkisi bulunamadı.'
+        ? '- Belirgin kalem etkisi bulunamadı.'
         : topDrivers.map((d) => '- $d').join('\n');
 
-    final prompt =
-        '''
-Simülasyon özeti:
-- Hedef: $goalName (${goalMillions.toStringAsFixed(2)}M)
-- Tahmini varış yılı: $goalYear
-- Seçili yılda beklenen portföy: ${projectedMillions.toStringAsFixed(2)}M
-- Aylık net surplus: ${monthlySurplus.toStringAsFixed(0)} TL
+    final income = transactions
+        .where((t) => t.isIncome)
+        .fold(0.0, (s, t) => s + t.amount);
+    final expense = transactions
+        .where((t) => t.isExpense)
+        .fold(0.0, (s, t) => s + t.amount);
 
-En etkili transaction kalemleri:
+    final fullPrompt =
+        '''Sen kısa ve net Türkçe finans yorumu yapan bir asistansın.
+
+Kullanıcı: ${profile.userName} | Bakiye: ${profile.currentBalance.toStringAsFixed(0)} TL | Günlük limit: ${profile.dailyLimit.toStringAsFixed(0)} TL
+Aylık gelir: ${income.toStringAsFixed(0)} TL | Aylık gider: ${expense.toStringAsFixed(0)} TL | Net surplus: ${monthlySurplus.toStringAsFixed(0)} TL
+Hedef: $goalName — ${goalMillions.toStringAsFixed(1)}M TL | Tahmini ulaşma: $goalYear | 2045 projeksiyonu: ${projectedMillions.toStringAsFixed(1)}M TL
+
+En etkili kalemler:
 $topDriverText
 
-Lütfen Türkçe ve kısa cevap ver:
-1) En kritik 2 aksiyon,
-2) Hedefi hızlandırmak için 1 somut sayı önerisi,
-3) 1 risk uyarısı.
-''';
+Sadece şu 3 maddeyi yaz, madde başı dışında hiç ek cümle ekleme:
+1) En kritik 1 aksiyon — somut TL rakamı içersin
+2) Hedefi hızlandıracak 1 öneri — somut sayı içersin
+3) 1 risk uyarısı
 
-    return sendMessage(prompt);
+Kural: Yıldız (*) veya markdown kullanma. Her madde en fazla 2 cümle.''';
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: AppEnv.geminiApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.6,
+          maxOutputTokens: 512,
+          topP: 0.9,
+        ),
+      );
+      final response = await model.generateContent([Content.text(fullPrompt)]);
+      final text = response.text;
+      if (text == null || text.trim().isEmpty) {
+        return _demoSimulationInsight(
+          goalName: goalName,
+          goalYear: goalYear,
+          projectedMillions: projectedMillions,
+          monthlySurplus: monthlySurplus,
+        );
+      }
+      return text.trim();
+    } catch (e) {
+      final raw = e.toString().toLowerCase();
+      if (raw.contains('503') ||
+          raw.contains('unavailable') ||
+          raw.contains('high demand')) {
+        return 'Gemini şu an yoğun. Birkaç saniye bekleyip tekrar dene.';
+      }
+      return _demoSimulationInsight(
+        goalName: goalName,
+        goalYear: goalYear,
+        projectedMillions: projectedMillions,
+        monthlySurplus: monthlySurplus,
+      );
+    }
   }
 
   String _demoResponse(String input) {
@@ -175,10 +343,25 @@ Lütfen Türkçe ve kısa cevap ver:
     return '$goalName hedefi için mevcut trend $trend görünüyor. Bu gidişle $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M seviyesine ulaşma potansiyelin var. Hedefe daha hızlı gitmek için aylık net katkını en az 1000 TL artırmayı dene.';
   }
 
+  String _freqLabel(String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return 'gün';
+      case 'weekly':
+        return 'hafta';
+      case 'yearly':
+        return 'yıl';
+      default:
+        return 'ay';
+    }
+  }
+
   String _buildSystemInstruction({
     required ProfileModel profile,
     required List<RecurringTransactionModel> transactions,
     required List<DailyLogModel> recentLogs,
+    List<RecurringRuleModel> rules = const [],
+    String goalName = '',
   }) {
     final income = transactions
         .where((t) => t.isIncome)
@@ -230,6 +413,28 @@ Lütfen Türkçe ve kısa cevap ver:
         })
         .join('\n');
 
+    final activeRules = rules.where((r) => r.isActive).toList();
+    final ruleIncomeLines = activeRules
+        .where((r) => r.isIncome)
+        .map((r) {
+          final freq = _freqLabel(r.frequency);
+          final desc = (r.description?.isNotEmpty == true)
+              ? ' (${r.description})'
+              : '';
+          return '  • ${r.category}$desc: +${r.amount.toStringAsFixed(0)} TL/$freq';
+        })
+        .join('\n');
+    final ruleExpenseLines = activeRules
+        .where((r) => r.isExpense)
+        .map((r) {
+          final freq = _freqLabel(r.frequency);
+          final desc = (r.description?.isNotEmpty == true)
+              ? ' (${r.description})'
+              : '';
+          return '  • ${r.category}$desc: -${r.amount.toStringAsFixed(0)} TL/$freq';
+        })
+        .join('\n');
+
     final today = DateTime.now();
 
     return '''
@@ -269,6 +474,13 @@ Havuza aktarılan : ${totalSavedLogs.toStringAsFixed(0)} TL
 Limit aşan gün   : $daysAboveLimit  |  Limit altı gün: $daysBelowLimit
 
 ${logLines.isEmpty ? '  (log kaydı yok)' : logLines}
+${activeRules.isNotEmpty ? '''
+─── DÜZENLİ GELİR/GİDER KURALLARI ───
+Düzenli gelirler:
+${ruleIncomeLines.isEmpty ? '  (kayıt yok)' : ruleIncomeLines}
+Düzenli giderler:
+${ruleExpenseLines.isEmpty ? '  (kayıt yok)' : ruleExpenseLines}
+''' : ''}${goalName.isNotEmpty ? '─── FİNANSAL HEDEF ───\nHedef: $goalName\n' : ''}
 ''';
   }
 }

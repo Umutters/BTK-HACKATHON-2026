@@ -20,6 +20,7 @@ class HomeViewModel extends ChangeNotifier {
   final GetDailyQuestsUseCase _getDailyQuestsUseCase;
   final StartQuestUseCase _startQuestUseCase;
   final CompleteQuestUseCase _completeQuestUseCase;
+  final LocalDataSource _localDataSource = LocalDataSource();
 
   HomeViewState _state = HomeViewState.initial;
   UserEntity? _user;
@@ -54,7 +55,8 @@ class HomeViewModel extends ChangeNotifier {
        _completeQuestUseCase = completeQuestUseCase;
 
   Future<void> initialize() async {
-    if (_state == HomeViewState.loaded) return;
+    if (_state == HomeViewState.loading || _state == HomeViewState.loaded)
+      return;
 
     _state = HomeViewState.loading;
     notifyListeners();
@@ -63,7 +65,7 @@ class HomeViewModel extends ChangeNotifier {
       final results = await Future.wait([
         _getUserProgressUseCase(),
         _getDailyQuestsUseCase(),
-        LocalDataSource().getRecurringTransactions(),
+        _localDataSource.getRecurringTransactions(),
       ]);
 
       _user = results[0] as UserEntity;
@@ -162,10 +164,10 @@ class HomeViewModel extends ChangeNotifier {
           days: 1,
         );
       } catch (_) {
-        logs = await LocalDataSource().getRecentDailyLogs(days: 1);
+        logs = await _localDataSource.getRecentDailyLogs(days: 1);
       }
     } else {
-      logs = await LocalDataSource().getRecentDailyLogs(days: 1);
+      logs = await _localDataSource.getRecentDailyLogs(days: 1);
     }
 
     return logs
@@ -179,7 +181,7 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> refreshTransactions() async {
-    final txns = await LocalDataSource().getRecurringTransactions();
+    final txns = await _localDataSource.getRecurringTransactions();
     _setTransactions(txns);
     notifyListeners();
   }

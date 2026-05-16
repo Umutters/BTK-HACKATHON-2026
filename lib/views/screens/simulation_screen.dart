@@ -376,10 +376,25 @@ class _DualChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DualChartPainter old) =>
-      old.currentPoints.length != currentPoints.length ||
-      old.optimizedPoints.length != optimizedPoints.length ||
-      old.goalMillions != goalMillions;
+  bool shouldRepaint(_DualChartPainter old) {
+    if (old.goalMillions != goalMillions) return true;
+    if (old.currentPoints.length != currentPoints.length) return true;
+    if (old.optimizedPoints.length != optimizedPoints.length) return true;
+    // Slider değişince nokta sayısı aynı kalır ama değerler değişir — son noktayı karşılaştır
+    if (currentPoints.isNotEmpty &&
+        old.currentPoints.isNotEmpty &&
+        old.currentPoints.last.amountMillions !=
+            currentPoints.last.amountMillions) {
+      return true;
+    }
+    if (optimizedPoints.isNotEmpty &&
+        old.optimizedPoints.isNotEmpty &&
+        old.optimizedPoints.last.amountMillions !=
+            optimizedPoints.last.amountMillions) {
+      return true;
+    }
+    return false;
+  }
 }
 
 // ─── Legend Dot ───────────────────────────────────────────────────────────────
@@ -414,12 +429,23 @@ class _LegendDot extends StatelessWidget {
 
 // ─── AI Insight Card ──────────────────────────────────────────────────────────
 
-class _AiInsightCard extends StatelessWidget {
+class _AiInsightCard extends StatefulWidget {
   final SimulationViewModel vm;
   const _AiInsightCard({required this.vm});
 
   @override
+  State<_AiInsightCard> createState() => _AiInsightCardState();
+}
+
+class _AiInsightCardState extends State<_AiInsightCard> {
+  bool _expanded = false;
+  static const int _collapsedMaxLines = 3;
+
+  @override
   Widget build(BuildContext context) {
+    final vm = widget.vm;
+    final text = vm.aiInsight;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppDimensions.spaceXL),
@@ -458,13 +484,48 @@ class _AiInsightCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDimensions.spaceM),
-          Text(
-            vm.aiInsight,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.onSurface,
-              fontFamily: 'Outfit',
-              height: 1.6,
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textStyle = AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.onSurface,
+                fontFamily: 'Outfit',
+                fontSize: 13,
+                height: 1.6,
+              );
+              final textPainter = TextPainter(
+                text: TextSpan(text: text, style: textStyle),
+                maxLines: _collapsedMaxLines,
+                textDirection: TextDirection.ltr,
+              )..layout(maxWidth: constraints.maxWidth);
+              final isOverflowing = textPainter.didExceedMaxLines;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    text,
+                    style: textStyle,
+                    maxLines: _expanded ? null : _collapsedMaxLines,
+                    overflow: _expanded
+                        ? TextOverflow.visible
+                        : TextOverflow.fade,
+                  ),
+                  if (isOverflowing) ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Text(
+                        _expanded ? 'Gizle' : 'Devamını gör',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.cyberBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppDimensions.spaceL),
           SizedBox(
@@ -472,8 +533,10 @@ class _AiInsightCard extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: vm.isGeneratingAi
                   ? null
-                  : () =>
-                        context.read<SimulationViewModel>().generateAiInsight(),
+                  : () {
+                      setState(() => _expanded = false);
+                      context.read<SimulationViewModel>().generateAiInsight();
+                    },
               icon: vm.isGeneratingAi
                   ? const SizedBox(
                       width: 14,

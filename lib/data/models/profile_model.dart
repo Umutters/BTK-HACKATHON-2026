@@ -4,7 +4,7 @@ import '../../domain/entities/user_entity.dart';
 class ProfileModel {
   final String id;
   final String userName;
-  final int age;
+  final int? age;
   final String gender;
   final double initialBalance;
   final double currentBalance;

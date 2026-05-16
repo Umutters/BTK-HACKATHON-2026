@@ -28,6 +28,8 @@ class _OracleView extends StatefulWidget {
 class _OracleViewState extends State<_OracleView> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  int _lastMessageCount = 0;
+  bool _wasTyping = false;
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -52,7 +54,14 @@ class _OracleViewState extends State<_OracleView> {
   Widget build(BuildContext context) {
     return Consumer<OracleViewModel>(
       builder: (context, vm, _) {
-        _scrollToBottom();
+        // Yeni mesaj geldiğinde veya typing başladığında scroll yap
+        final newMessage = vm.messages.length != _lastMessageCount;
+        final typingStarted = vm.isOracleTyping && !_wasTyping;
+        if (newMessage || typingStarted) {
+          _lastMessageCount = vm.messages.length;
+          _wasTyping = vm.isOracleTyping;
+          _scrollToBottom();
+        }
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: _OracleAppBar(),
@@ -76,7 +85,7 @@ class _OracleViewState extends State<_OracleView> {
                               message: msg,
                               onAction: (text) => context
                                   .read<OracleViewModel>()
-                                  .sendMessage(text),
+                                  .sendActionButton(text),
                             )
                           : _UserBubble(message: msg);
                     }
@@ -260,7 +269,7 @@ class _ChatHeader extends StatelessWidget {
           ),
           const SizedBox(height: AppDimensions.spaceS),
           Text(
-            'Yapay zeka hassasiyetiyle piyasa değişimlerini\nbelirleyin ve yüksek riskli portföyünüzü optimize edin.',
+            'Gelir, gider ve tasarruf verilerinizi analiz ederek\nkişiselleştirilmiş finansal öneriler sunar.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.onSurfaceVariant,

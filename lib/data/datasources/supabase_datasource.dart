@@ -1,6 +1,7 @@
 import '../models/profile_model.dart';
 import '../models/quest_model.dart';
 import '../models/recurring_transaction_model.dart';
+import '../models/recurring_rule_model.dart';
 import '../models/daily_log_model.dart';
 import '../models/crisis_event_model.dart';
 import '../models/decision_log_model.dart';
@@ -33,6 +34,14 @@ class SupabaseDataSource {
     final userId = _supabase.currentUserId;
     if (userId == null) throw Exception('Kullanıcı oturum açmamış.');
     return _supabase.getRecurringTransactions(userId);
+  }
+
+  // ─── Recurring Rules ──────────────────────────────────────────────────────
+
+  Future<List<RecurringRuleModel>> getRecurringRules() async {
+    final userId = _supabase.currentUserId;
+    if (userId == null) return const [];
+    return _supabase.getRecurringRules(userId);
   }
 
   // ─── Daily Logs ───────────────────────────────────────────────────────────

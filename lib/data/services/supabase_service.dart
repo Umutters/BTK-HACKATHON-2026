@@ -407,7 +407,7 @@ class SupabaseService {
         .insert(payload)
         .select()
         .single();
-    return RecurringRuleModel.fromJson(inserted as Map<String, dynamic>);
+    return RecurringRuleModel.fromJson(inserted);
   }
 
   Future<void> updateRecurringRule(RecurringRuleModel rule) async {

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import '../data/datasources/local_datasource.dart';
+import '../data/models/crisis_event_model.dart';
 import '../data/models/daily_log_model.dart';
 import '../data/models/profile_model.dart';
 import '../data/models/recurring_rule_model.dart';
@@ -54,6 +57,10 @@ class OracleViewModel extends ChangeNotifier {
   List<DailyLogModel> _cachedLogs = [];
   List<RecurringRuleModel> _cachedRules = [];
   String _cachedGoalName = '';
+
+  // ─── Kriz yönetimi ───────────────────────────────────────────────────
+  CrisisEventModel? _pendingCrisis;
+  CrisisEventModel? _scheduledCrisisInjection;
 
   final GeminiService _gemini;
   final SupabaseDataSource _dataSource;
@@ -150,6 +157,12 @@ class OracleViewModel extends ChangeNotifier {
       if (_messages.isEmpty) _seedFallbackMessages();
     } finally {
       _isInitialized = true;
+      // Eğer bekleyen bir kriz injeksiyonu varsa şimdi çalıştır
+      if (_scheduledCrisisInjection != null) {
+        final crisis = _scheduledCrisisInjection!;
+        _scheduledCrisisInjection = null;
+        unawaited(_doInjectCrisis(crisis));
+      }
       notifyListeners();
     }
   }
@@ -264,9 +277,132 @@ class OracleViewModel extends ChangeNotifier {
     }
   }
 
+  // ─── Kriz Enjeksiyonu ────────────────────────────────────────────────────────
+
+  /// Dashboard'dan tetiklenir: kriz olayını Oracle'a inject eder.
+  /// Oracle henüz init olmadıysa, init tamamlanınca otomatik çalışır.
+  Future<void> injectCrisisEvent(CrisisEventModel crisis) async {
+    if (!_isInitialized || _cachedProfile == null) {
+      _scheduledCrisisInjection = crisis;
+      return;
+    }
+    await _doInjectCrisis(crisis);
+  }
+
+  Future<void> _doInjectCrisis(CrisisEventModel crisis) async {
+    _pendingCrisis = crisis;
+
+    final amountStr = crisis.amount.toStringAsFixed(0);
+    final balanceStr = _cachedProfile?.currentBalance.toStringAsFixed(0) ?? '?';
+    final poolStr = _cachedProfile?.savingsPool.toStringAsFixed(0) ?? '?';
+
+    // Kullanıcı mesajı olarak kriz alarmını göster
+    _messages.add(
+      ChatMessage(
+        id: 'crisis_${DateTime.now().millisecondsSinceEpoch}',
+        text:
+            '🚨 KRİZ ALARMI: "${crisis.eventName}" — $amountStr TL beklenmedik gider!',
+        sender: MessageSender.user,
+        timestamp: DateTime.now(),
+      ),
+    );
+    _isOracleTyping = true;
+    notifyListeners();
+
+    final prompt =
+        '🚨 KRİZ DURUMU: "${crisis.eventName}" adında beklenmedik bir gider ortaya çıktı — tutar: $amountStr TL\n\n'
+        'Kullanıcının mevcut finansal durumu:\n'
+        '- Anlık bakiye: $balanceStr TL\n'
+        '- Birikim havuzu: $poolStr TL\n\n'
+        'Bu kriz için iki seçenek var:\n'
+        '1. 🏦 Birikim havuzundan karşıla ($poolStr TL mevcut)\n'
+        '2. 💰 Anlık bütçeden karşıla ($balanceStr TL mevcut)\n\n'
+        'Lütfen şunları analiz et:\n'
+        '- Bu krizin 2045 hedefine etkisi nedir?\n'
+        '- Hangi stratejiyle karşılamalı ve neden?\n'
+        '- Bu durumdan sonra toparlanmak için 1-2 somut öneri ver.\n'
+        'Yanıtın 3-4 paragraf uzunluğunda, dramatik ama yapıcı olsun.';
+
+    try {
+      final response = await _gemini.generateDirectAnalysis(
+        profile: _cachedProfile!,
+        transactions: _cachedTransactions,
+        recentLogs: _cachedLogs,
+        rules: _cachedRules,
+        goalName: _cachedGoalName,
+        question: prompt,
+      );
+      _addOracleMessage(
+        response,
+        actionButtons: ['🏦 Havuzdan Karşıla', '💰 Bütçeden Karşıla'],
+      );
+    } catch (e) {
+      _addOracleMessage(
+        'Kriz analizi yapılamadı: ${e.toString()}. Kaynağını seçerek devam edebilirsin.',
+        actionButtons: ['🏦 Havuzdan Karşıla', '💰 Bütçeden Karşıla'],
+      );
+    } finally {
+      _isOracleTyping = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _resolvePendingCrisis(String strategy) async {
+    final crisis = _pendingCrisis;
+    if (crisis == null) return;
+    _pendingCrisis = null;
+
+    final userId = SupabaseService.instance.currentUserId;
+    if (userId == null || _cachedProfile == null) return;
+
+    _isOracleTyping = true;
+    notifyListeners();
+
+    try {
+      if (strategy == 'pool') {
+        await SupabaseService.instance.addToSavingsPool(userId, -crisis.amount);
+      } else {
+        final newBalance = (_cachedProfile!.currentBalance - crisis.amount)
+            .clamp(0.0, double.maxFinite);
+        await SupabaseService.instance.updateBalance(userId, newBalance);
+      }
+
+      await SupabaseService.instance.updateCrisisResolution(
+        crisis.id,
+        strategy,
+      );
+
+      final newXp = (_cachedProfile?.xp ?? 0) + 75;
+      await SupabaseService.instance.updateXp(userId, newXp);
+
+      final sourceLabel = strategy == 'pool' ? 'Birikim Havuzu' : 'Bütçe';
+      final amountStr = crisis.amount.toStringAsFixed(0);
+      _addOracleMessage(
+        '✅ **${crisis.eventName}** krizi $sourceLabel\'ndan karşılandı ($amountStr TL).\n'
+        '⚡ **+75 XP** kazandın — kriz yönetimi finansal farkındalığın kanıtı.\n'
+        'Toparlanma önerilerini uygulamaya başlarsan 2045 hedefine olan etkiyi minimize edersin.',
+      );
+    } catch (e) {
+      _addOracleMessage('İşlem sırasında bir hata oluştu: ${e.toString()}');
+    } finally {
+      _isOracleTyping = false;
+      notifyListeners();
+    }
+  }
+
   /// Action butonlarına özel, cache'deki gerçek rakamları içeren zengin prompt gönderir.
   /// Action butonları için: verileri doğrudan gemini-2.0-flash'a gönderir.
   Future<void> sendActionButton(String action) async {
+    // Kriz çözüm butonlarını yakala
+    if (action == '🏦 Havuzdan Karşıla') {
+      await _resolvePendingCrisis('pool');
+      return;
+    }
+    if (action == '💰 Bütçeden Karşıla') {
+      await _resolvePendingCrisis('budget');
+      return;
+    }
+
     if (_cachedProfile == null) {
       _addOracleMessage(
         'Finansal verilerine henüz ulaşamadım. Lütfen sohbeti yenile (sağ üst simge) veya internet bağlantını kontrol edip tekrar dene.',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -131,38 +132,7 @@ class SimulationViewModel extends ChangeNotifier {
     return _endYear;
   }
 
-  String get aiInsight {
-    if (_aiInsightOverride != null && _aiInsightOverride!.trim().isNotEmpty) {
-      return _aiInsightOverride!;
-    }
-
-    if (_currentPoints.isEmpty) {
-      return 'Simülasyon verileri yükleniyor...';
-    }
-
-    final currentFinal = _currentPoints.last.amountMillions;
-    final optimizedFinal = _optimizedPoints.isEmpty
-        ? currentFinal
-        : _optimizedPoints.last.amountMillions;
-    final gain = optimizedFinal - currentFinal;
-
-    if (currentFinal >= _goalMillions) {
-      return 'Mevcut rotanla $aiGoalYear yılında ${_goalMillions.toStringAsFixed(1)}M TL hedefine ulaşıyorsun. Oracle seni takip ediyor.';
-    }
-
-    if (_extraDailySavings > 0 && gain > 0.01) {
-      return 'Günlük ${_extraDailySavings.toStringAsFixed(0)} TL ek tasarruf ve %${(_annualReturnRateSlider * 100).toStringAsFixed(0)} getiriyle 2045\'te ${optimizedFinal.toStringAsFixed(1)}M TL\'ye ulaşabilirsin. Mevcut rotana göre ${gain.toStringAsFixed(1)}M TL avantaj.';
-    }
-
-    final gapMillions = (_goalMillions - currentFinal).clamp(
-      0,
-      double.infinity,
-    );
-    final remainingYears = max(1, _endYear - _startYear);
-    final suggestedMonthly = (gapMillions * 1000000) / (remainingYears * 12);
-
-    return 'Mevcut hızla $_endYear yılına kadar ${currentFinal.toStringAsFixed(1)}M TL seviyesine ulaşırsın. Hedefe daha erken varmak için aylık fazlanı yaklaşık ${suggestedMonthly.toStringAsFixed(0)} TL artırabilirsin.';
-  }
+  String get aiInsight => _aiInsightOverride ?? '';
 
   void setExtraDailySavings(double value) {
     _extraDailySavings = value.clamp(0, 500);
@@ -240,6 +210,9 @@ class SimulationViewModel extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+
+    // AI analizi otomatik başlat — matematiksel model değil Gemini yorumlasın
+    unawaited(generateAiInsight());
   }
 
   void _rebuildProjection({

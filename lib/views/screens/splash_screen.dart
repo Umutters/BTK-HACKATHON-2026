@@ -54,8 +54,8 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => widget.nextScreen,
-          transitionsBuilder: (_, animation, __, child) {
+          pageBuilder: (_, _, _) => widget.nextScreen,
+          transitionsBuilder: (_, animation, _, child) {
             return FadeTransition(opacity: animation, child: child);
           },
           transitionDuration: const Duration(milliseconds: 600),

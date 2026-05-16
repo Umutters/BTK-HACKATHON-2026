@@ -56,7 +56,6 @@ class AppBottomNavBar extends StatelessWidget {
                   onTap: onTap,
                 ),
               ),
-              const SizedBox(width: 84),
               Expanded(
                 child: _NavItem(
                   data: _items[2],

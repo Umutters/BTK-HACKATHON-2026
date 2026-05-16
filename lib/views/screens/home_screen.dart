@@ -1,14 +1,19 @@
 import 'package:btk_hackathon_2026/viewmodels/navigation_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../data/models/crisis_event_model.dart';
 import '../../data/models/recurring_transaction_model.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../viewmodels/oracle_viewmodel.dart';
 import '../widgets/atoms/ff_button.dart';
+import '../widgets/molecules/crisis_event_card.dart';
 import '../widgets/molecules/level_progress_card.dart';
+import '../widgets/organisms/crisis_report_sheet.dart';
 import '../widgets/organisms/daily_quests_section.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,12 +24,32 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late final ScrollController _scrollCtrl;
+
   @override
   void initState() {
     super.initState();
+    _scrollCtrl = ScrollController();
+    _scrollCtrl.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeViewModel>().initialize();
     });
+  }
+
+  void _onScroll() {
+    final dir = _scrollCtrl.position.userScrollDirection;
+    final navVm = context.read<NavigationViewModel>();
+    if (dir == ScrollDirection.reverse) {
+      navVm.setFabVisible(false);
+    } else if (dir == ScrollDirection.forward) {
+      navVm.setFabVisible(true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -38,7 +63,10 @@ class _HomeScreenState extends State<HomeScreen> {
             HomeViewState.initial ||
             HomeViewState.loading => const _LoadingView(),
             HomeViewState.error => _ErrorView(message: vm.errorMessage),
-            HomeViewState.loaded => _LoadedView(vm: vm),
+            HomeViewState.loaded => _LoadedView(
+              vm: vm,
+              scrollController: _scrollCtrl,
+            ),
           },
         );
       },
@@ -149,13 +177,15 @@ class _ErrorView extends StatelessWidget {
 
 class _LoadedView extends StatelessWidget {
   final HomeViewModel vm;
+  final ScrollController scrollController;
 
-  const _LoadedView({required this.vm});
+  const _LoadedView({required this.vm, required this.scrollController});
 
   @override
   Widget build(BuildContext context) {
     final user = vm.user!;
     return SingleChildScrollView(
+      controller: scrollController,
       physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,6 +216,13 @@ class _LoadedView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
               horizontal: AppDimensions.pagePaddingH,
             ),
+            child: _KrizBildirButton(),
+          ),
+          const SizedBox(height: AppDimensions.spaceL),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimensions.pagePaddingH,
+            ),
             child: _TransactionsCard(
               transactions: vm.recentTransactions,
               allTransactions: vm.allTransactions,
@@ -197,6 +234,8 @@ class _LoadedView extends StatelessWidget {
             completedCount: vm.completedQuestsCount,
             onStartQuest: vm.startQuest,
           ),
+          const SizedBox(height: AppDimensions.spaceXXL),
+          _CrisisHistorySection(crisisEvents: vm.crisisEvents),
           const SizedBox(height: AppDimensions.spaceXXL),
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -457,6 +496,132 @@ class _TransactionsCard extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+// ─── Kriz Bildir Button ───────────────────────────────────────────────────────
+
+class _KrizBildirButton extends StatelessWidget {
+  const _KrizBildirButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => _showCrisisSheet(context),
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: AppColors.cyberMagenta, width: 1.5),
+        foregroundColor: AppColors.cyberMagenta,
+        backgroundColor: AppColors.cyberMagenta20,
+        minimumSize: const Size(double.infinity, 50),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.spaceL,
+          vertical: AppDimensions.spaceM,
+        ),
+      ),
+      icon: const Icon(Icons.bolt_rounded, size: 20),
+      label: Text(
+        'Kriz Bildir',
+        style: AppTextStyles.labelLarge.copyWith(
+          color: AppColors.cyberMagenta,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCrisisSheet(BuildContext context) async {
+    final result = await showModalBottomSheet<CrisisEventModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CrisisReportSheet(),
+    );
+    if (result == null || !context.mounted) return;
+    context.read<NavigationViewModel>().setIndex(1);
+    context.read<OracleViewModel>().injectCrisisEvent(result);
+  }
+}
+
+// ─── Crisis History Section ───────────────────────────────────────────────────
+
+class _CrisisHistorySection extends StatefulWidget {
+  final List<CrisisEventModel> crisisEvents;
+
+  const _CrisisHistorySection({required this.crisisEvents});
+
+  @override
+  State<_CrisisHistorySection> createState() => _CrisisHistorySectionState();
+}
+
+class _CrisisHistorySectionState extends State<_CrisisHistorySection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.crisisEvents.isEmpty) return const SizedBox.shrink();
+
+    final displayed = _expanded
+        ? widget.crisisEvents
+        : widget.crisisEvents.take(3).toList();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.pagePaddingH,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.history_rounded,
+                color: AppColors.cyberMagenta,
+                size: 18,
+              ),
+              const SizedBox(width: AppDimensions.spaceS),
+              Text(
+                'KRİZ GEÇMİŞİ',
+                style: AppTextStyles.labelCaps.copyWith(
+                  color: AppColors.cyberMagenta,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              if (widget.crisisEvents.length > 3)
+                TextButton(
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.cyberMagenta,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spaceS,
+                      vertical: AppDimensions.spaceXS,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    _expanded ? 'Gizle' : 'Tümünü Gör',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.cyberMagenta,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          ...displayed.map(
+            (crisis) => Padding(
+              padding: const EdgeInsets.only(bottom: AppDimensions.spaceS),
+              child: CrisisEventCard(crisis: crisis),
+            ),
+          ),
         ],
       ),
     );

@@ -9,6 +9,7 @@ import '../../domain/usecases/get_daily_quests_usecase.dart';
 import '../../domain/usecases/get_user_progress_usecase.dart';
 import '../../domain/usecases/start_quest_usecase.dart';
 import '../data/datasources/local_datasource.dart';
+import '../data/models/crisis_event_model.dart';
 import '../data/models/daily_log_model.dart';
 import '../data/models/recurring_transaction_model.dart';
 import '../data/services/supabase_service.dart';
@@ -28,6 +29,7 @@ class HomeViewModel extends ChangeNotifier {
   double _savingsPool = 0;
   List<RecurringTransactionModel> _transactions = [];
   List<QuestEntity> _quests = [];
+  List<CrisisEventModel> _crisisEvents = [];
   String? _errorMessage;
 
   HomeViewState get state => _state;
@@ -39,6 +41,7 @@ class HomeViewModel extends ChangeNotifier {
   List<RecurringTransactionModel> get recentTransactions =>
       _transactions.take(5).toList(growable: false);
   List<QuestEntity> get quests => _quests;
+  List<CrisisEventModel> get crisisEvents => List.unmodifiable(_crisisEvents);
   String? get errorMessage => _errorMessage;
 
   int get completedQuestsCount =>
@@ -96,6 +99,14 @@ class HomeViewModel extends ChangeNotifier {
           }
         } catch (_) {
           // Best-effort: don't fail initialization if auto-apply errors
+        }
+
+        try {
+          _crisisEvents = await SupabaseService.instance.getCrisisEvents(
+            userId,
+          );
+        } catch (_) {
+          _crisisEvents = [];
         }
       }
 

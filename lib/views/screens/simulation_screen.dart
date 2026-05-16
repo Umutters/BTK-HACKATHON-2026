@@ -445,6 +445,8 @@ class _AiInsightCardState extends State<_AiInsightCard> {
   Widget build(BuildContext context) {
     final vm = widget.vm;
     final text = vm.aiInsight;
+    final isGenerating = vm.isGeneratingAi;
+    final hasText = text.trim().isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -452,7 +454,11 @@ class _AiInsightCardState extends State<_AiInsightCard> {
       decoration: BoxDecoration(
         color: AppColors.glass08,
         borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-        border: Border.all(color: AppColors.glass12),
+        border: Border.all(
+          color: isGenerating
+              ? AppColors.cyberBlue.withAlpha(60)
+              : AppColors.glass12,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,88 +473,123 @@ class _AiInsightCardState extends State<_AiInsightCard> {
                   color: AppColors.cyberBlue10,
                   border: Border.all(color: AppColors.cyberBlue15),
                 ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: AppColors.cyberBlue,
-                  size: 16,
-                ),
+                child: isGenerating
+                    ? const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.cyberBlue,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.cyberBlue,
+                        size: 16,
+                      ),
               ),
               const SizedBox(width: AppDimensions.spaceS),
               Text(
-                'YAPAY ZEKA YORUMU',
+                isGenerating
+                    ? 'YAPAY ZEKA ANALİZ EDİYOR...'
+                    : 'YAPAY ZEKA ANALİZİ',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.cyberBlueDim,
+                  color: isGenerating
+                      ? AppColors.cyberBlue
+                      : AppColors.cyberBlueDim,
                   letterSpacing: 1.5,
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppDimensions.spaceM),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final textStyle = AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.onSurface,
-                fontFamily: 'Outfit',
-                fontSize: 13,
-                height: 1.6,
-              );
-              final textPainter = TextPainter(
-                text: TextSpan(text: text, style: textStyle),
-                maxLines: _collapsedMaxLines,
-                textDirection: TextDirection.ltr,
-              )..layout(maxWidth: constraints.maxWidth);
-              final isOverflowing = textPainter.didExceedMaxLines;
+          if (isGenerating && !hasText)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ShimmerLine(width: double.infinity),
+                const SizedBox(height: 8),
+                _ShimmerLine(width: 260),
+                const SizedBox(height: 8),
+                _ShimmerLine(width: 200),
+              ],
+            )
+          else if (hasText)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final textStyle = AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.onSurface,
+                  fontFamily: 'Outfit',
+                  fontSize: 13,
+                  height: 1.6,
+                );
+                final textPainter = TextPainter(
+                  text: TextSpan(text: text, style: textStyle),
+                  maxLines: _collapsedMaxLines,
+                  textDirection: TextDirection.ltr,
+                )..layout(maxWidth: constraints.maxWidth);
+                final isOverflowing = textPainter.didExceedMaxLines;
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    text,
-                    style: textStyle,
-                    maxLines: _expanded ? null : _collapsedMaxLines,
-                    overflow: _expanded
-                        ? TextOverflow.visible
-                        : TextOverflow.fade,
-                  ),
-                  if (isOverflowing) ...[
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: () => setState(() => _expanded = !_expanded),
-                      child: Text(
-                        _expanded ? 'Gizle' : 'Devamını gör',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.cyberBlue,
-                          fontWeight: FontWeight.w600,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      text,
+                      style: textStyle,
+                      maxLines: _expanded ? null : _collapsedMaxLines,
+                      overflow: _expanded
+                          ? TextOverflow.visible
+                          : TextOverflow.fade,
+                    ),
+                    if (isOverflowing) ...[
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _expanded = !_expanded),
+                        child: Text(
+                          _expanded ? 'Gizle' : 'Devamını gör',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.cyberBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
-              );
-            },
-          ),
+                );
+              },
+            )
+          else
+            Text(
+              'Yapay zeka analizi başlatılamadı.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
           const SizedBox(height: AppDimensions.spaceL),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: vm.isGeneratingAi
+              onPressed: isGenerating
                   ? null
                   : () {
                       setState(() => _expanded = false);
                       context.read<SimulationViewModel>().generateAiInsight();
                     },
-              icon: vm.isGeneratingAi
+              icon: isGenerating
                   ? const SizedBox(
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.auto_awesome_rounded, size: 16),
+                  : const Icon(Icons.refresh_rounded, size: 16),
               label: Text(
-                vm.isGeneratingAi ? 'Üretiliyor...' : 'Yorumu Yenile',
+                isGenerating ? 'Analiz Ediliyor...' : 'Yeniden Analiz Et',
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.cyberBlue),
+                side: BorderSide(
+                  color: isGenerating
+                      ? AppColors.cyberBlue.withAlpha(80)
+                      : AppColors.cyberBlue,
+                ),
                 foregroundColor: AppColors.cyberBlue,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 textStyle: AppTextStyles.labelMedium,
@@ -556,6 +597,56 @@ class _AiInsightCardState extends State<_AiInsightCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Shimmer placeholder line ─────────────────────────────────────────────────
+
+class _ShimmerLine extends StatefulWidget {
+  final double width;
+  const _ShimmerLine({required this.width});
+
+  @override
+  State<_ShimmerLine> createState() => _ShimmerLineState();
+}
+
+class _ShimmerLineState extends State<_ShimmerLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.15,
+      end: 0.35,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _) => Container(
+        height: 12,
+        width: widget.width,
+        decoration: BoxDecoration(
+          color: AppColors.cyberBlue.withOpacity(_anim.value),
+          borderRadius: BorderRadius.circular(6),
+        ),
       ),
     );
   }

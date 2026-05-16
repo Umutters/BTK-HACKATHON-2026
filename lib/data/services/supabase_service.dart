@@ -347,7 +347,7 @@ class SupabaseService {
         .from('crisis_events')
         .select()
         .eq('user_id', userId)
-        .order('id', ascending: false);
+        .order('created_at', ascending: false);
     return (data as List)
         .map((e) => CrisisEventModel.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -355,6 +355,11 @@ class SupabaseService {
 
   Future<void> insertCrisisEvent(CrisisEventModel event) =>
       _client.from('crisis_events').insert(event.toInsertJson());
+
+  Future<void> updateCrisisResolution(String id, String strategy) => _client
+      .from('crisis_events')
+      .update({'resolution_strategy': strategy})
+      .eq('id', id);
 
   // ─── Decisions Log ────────────────────────────────────────────────────────
 

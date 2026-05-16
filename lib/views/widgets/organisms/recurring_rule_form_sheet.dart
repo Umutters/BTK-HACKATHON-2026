@@ -718,7 +718,7 @@ class _DayOfMonthSelector extends StatelessWidget {
           SizedBox(
             width: 40,
             child: Text(
-              '${value}. günü',
+              '$value. günü',
               textAlign: TextAlign.right,
               style: AppTextStyles.labelMedium.copyWith(
                 color: AppColors.cyberBlue,

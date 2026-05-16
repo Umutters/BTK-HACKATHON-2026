@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
 import '../../core/constants/app_text_styles.dart';
+import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/oracle_viewmodel.dart';
 
 class AiOracleScreen extends StatelessWidget {
@@ -11,10 +12,7 @@ class AiOracleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => OracleViewModel(),
-      child: const _OracleView(),
-    );
+    return const _OracleView();
   }
 }
 
@@ -41,6 +39,12 @@ class _OracleViewState extends State<_OracleView> {
         );
       }
     });
+  }
+
+  void _sendMessage(String text) {
+    if (text.trim().isEmpty) return;
+    context.read<OracleViewModel>().sendMessage(text);
+    context.read<HomeViewModel>().completeQuest('q3');
   }
 
   @override
@@ -96,16 +100,13 @@ class _OracleViewState extends State<_OracleView> {
                 ),
               ),
               if (vm.messages.length < 3)
-                _QuickSuggestions(
-                  onTap: (text) =>
-                      context.read<OracleViewModel>().sendMessage(text),
-                ),
+                _QuickSuggestions(onTap: (text) => _sendMessage(text)),
               _InputBar(
                 controller: _controller,
                 onSend: () {
                   final text = _controller.text;
                   _controller.clear();
-                  context.read<OracleViewModel>().sendMessage(text);
+                  _sendMessage(text);
                 },
               ),
             ],

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -22,11 +24,24 @@ Future<void> main() async {
 
   // Supabase başlatma
   if (AppEnv.supabaseUrl.isNotEmpty && AppEnv.supabaseAnonKey.isNotEmpty) {
-    await Supabase.initialize(
-      url: AppEnv.supabaseUrl,
-      anonKey: AppEnv.supabaseAnonKey,
-    );
-    await SupabaseService.instance.ensureSignedIn();
+    try {
+      await _runWithTimeout<void>(
+        Supabase.initialize(
+          url: AppEnv.supabaseUrl,
+          anonKey: AppEnv.supabaseAnonKey,
+        ),
+        const Duration(seconds: 3),
+      );
+
+      await _runWithTimeout<void>(
+        SupabaseService.instance.ensureSignedIn(),
+        const Duration(seconds: 2),
+      );
+    } catch (e) {
+      // Ağ gecikmelerinde açılışı bloklamayalım; uygulama local fallback ile devam eder.
+      // ignore: avoid_print
+      print('Supabase startup timeout/fallback: $e');
+    }
   }
 
   final bool onboardingDone = await _checkOnboardingDone();
@@ -58,7 +73,10 @@ Future<bool> _checkOnboardingDone() async {
     const maxAttempts = 2;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        final profile = await supabase.getProfile(userId);
+        final profile = await _runWithTimeout(
+          supabase.getProfile(userId),
+          const Duration(seconds: 2),
+        );
         if (profile != null) {
           // Supabase'den çekilen profili local cache'e yaz
           await localDataSource.saveProfile(profile);
@@ -95,7 +113,16 @@ bool _isTransientNetworkError(Object error) {
   final message = error.toString().toLowerCase();
   return message.contains('failed host lookup') ||
       message.contains('socketexception') ||
-      message.contains('connection closed');
+      message.contains('connection closed') ||
+      message.contains('timeoutexception') ||
+      message.contains('operation timed out');
+}
+
+Future<T> _runWithTimeout<T>(Future<T> future, Duration timeout) {
+  return future.timeout(
+    timeout,
+    onTimeout: () => throw TimeoutException('operation timed out'),
+  );
 }
 
 class FortuneFlowApp extends StatelessWidget {

@@ -267,7 +267,7 @@ KURAL: Yanıtta sadece bu kullanıcının TL rakamlarını kullan. Markdown yıl
 
 Kullanıcı: ${profile.userName} | Bakiye: ${profile.currentBalance.toStringAsFixed(0)} TL | Günlük limit: ${profile.dailyLimit.toStringAsFixed(0)} TL
 Aylık gelir: ${income.toStringAsFixed(0)} TL | Aylık gider: ${expense.toStringAsFixed(0)} TL | Net surplus: ${monthlySurplus.toStringAsFixed(0)} TL
-Hedef: $goalName — ${goalMillions.toStringAsFixed(1)}M TL | Tahmini ulaşma: $goalYear | 2045 projeksiyonu: ${projectedMillions.toStringAsFixed(1)}M TL
+Hedef: $goalName — ${goalMillions.toStringAsFixed(1)}M TL | Tahmini ulaşma: $goalYear | Uzun vadeli projeksiyon: ${projectedMillions.toStringAsFixed(1)}M TL
 
 En etkili kalemler:
 $topDriverText
@@ -313,6 +313,103 @@ Kural: Yıldız (*) veya markdown kullanma. Her madde en fazla 2 cümle.''';
         projectedMillions: projectedMillions,
         monthlySurplus: monthlySurplus,
       );
+    }
+  }
+
+  /// Hızlı işlem ekranındaki kısa etki metni için Gemini analizi.
+  /// Başarısız olursa null döner; çağıran taraf lokal fallback kullanır.
+  Future<String?> generateQuickTransactionPreview({
+    required String entryType,
+    required String category,
+    required double amount,
+    required double currentBalance,
+    required double savingsPool,
+    required double dailyLimit,
+  }) async {
+    if (AppEnv.geminiApiKey.isEmpty) return null;
+
+    final prompt =
+        '''Türkçe konuşan kişisel finans asistanısın. Kullanıcı hızlı işlem giriyor.
+
+İşlem tipi: $entryType
+Kategori: $category
+Tutar: ${amount.toStringAsFixed(0)} TL
+Mevcut bakiye: ${currentBalance.toStringAsFixed(0)} TL
+Birikim havuzu: ${savingsPool.toStringAsFixed(0)} TL
+Günlük limit: ${dailyLimit.toStringAsFixed(0)} TL
+
+Görev:
+- Kullanıcıya bu işlemin kısa etkisini tek cümleyle anlat.
+- Somut sayı kullan.
+- En fazla 120 karakter yaz.
+- Sadece düz metin döndür, yıldız veya markdown kullanma.''';
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: AppEnv.geminiApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.4,
+          maxOutputTokens: 120,
+          topP: 0.9,
+        ),
+      );
+
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim();
+      if (text == null || text.isEmpty) return null;
+      return text.replaceAll('\n', ' ');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Hızlı işlem ekranındaki Gemini Scan butonu için kısa analiz üretir.
+  /// Başarısız olursa null döner, böylece çağıran taraf yerel fallback kullanır.
+  Future<String?> generateQuickScanAnalysis({
+    required String entryType,
+    required String category,
+    required double amount,
+    required double currentBalance,
+    required double savingsPool,
+    required double dailyLimit,
+  }) async {
+    if (AppEnv.geminiApiKey.isEmpty) return null;
+
+    final prompt =
+        '''Türkçe konuşan kişisel finans AI asistanısın. Kullanıcının hızlı işlem ekranındaki girdisini analiz et.
+
+İşlem tipi: $entryType
+Kategori: $category
+Tutar: ${amount.toStringAsFixed(0)} TL
+Mevcut bakiye: ${currentBalance.toStringAsFixed(0)} TL
+Birikim havuzu: ${savingsPool.toStringAsFixed(0)} TL
+Günlük limit: ${dailyLimit.toStringAsFixed(0)} TL
+
+Görev:
+- Sadece 1 kısa paragraf yaz.
+- Kullanıcının işleminin finansal etkisini yorumla.
+- Somut sayı kullan.
+- En fazla 140 karakter yaz.
+- Sadece düz metin döndür, markdown kullanma.''';
+
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash',
+        apiKey: AppEnv.geminiApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.45,
+          maxOutputTokens: 140,
+          topP: 0.9,
+        ),
+      );
+
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim();
+      if (text == null || text.isEmpty) return null;
+      return text.replaceAll('\n', ' ');
+    } catch (_) {
+      return null;
     }
   }
 

@@ -49,11 +49,11 @@ class SimulationViewModel extends ChangeNotifier {
   final GeminiService _geminiService;
   final DateTime Function() _now;
 
-  static const int _targetYear = 2045;
   static const double _defaultAnnualReturnRate = 0.08;
 
   late final int _startYear;
   late final int _endYear;
+  late final int _routeYears;
 
   List<ProjectionPoint> _currentPoints = const [];
   List<ProjectionPoint> _optimizedPoints = const [];
@@ -84,7 +84,8 @@ class SimulationViewModel extends ChangeNotifier {
        _geminiService = geminiService ?? GeminiService(),
        _now = now ?? DateTime.now {
     _startYear = _now().year;
-    _endYear = _targetYear;
+    _routeYears = 5;
+    _endYear = _startYear + _routeYears;
     _bootstrap();
   }
 
@@ -249,7 +250,7 @@ class SimulationViewModel extends ChangeNotifier {
 
     _currentPoints = _buildFvCurve(
       startYear: _startYear,
-      targetYear: _targetYear,
+      targetYear: _endYear,
       initialAmount: baseAmount,
       monthlyPmt: _monthlySurplus,
       annualRate: _defaultAnnualReturnRate,
@@ -257,7 +258,7 @@ class SimulationViewModel extends ChangeNotifier {
 
     _optimizedPoints = _buildFvCurve(
       startYear: _startYear,
-      targetYear: _targetYear,
+      targetYear: _endYear,
       initialAmount: baseAmount,
       monthlyPmt: _monthlySurplus + _extraDailySavings * 30,
       annualRate: _annualReturnRateSlider,
@@ -281,7 +282,7 @@ class SimulationViewModel extends ChangeNotifier {
     final baseAmount = _estimateBaseWealth(_profile);
     _optimizedPoints = _buildFvCurve(
       startYear: _startYear,
-      targetYear: _targetYear,
+      targetYear: _endYear,
       initialAmount: baseAmount,
       monthlyPmt: _monthlySurplus + _extraDailySavings * 30,
       annualRate: _annualReturnRateSlider,

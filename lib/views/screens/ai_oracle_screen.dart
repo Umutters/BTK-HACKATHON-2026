@@ -141,10 +141,7 @@ class _OracleAppBar extends StatelessWidget implements PreferredSizeWidget {
             border: Border.all(color: AppColors.cyberBlue15),
           ),
           child: ClipOval(
-            child: Image.asset(
-              'assets/images/app_logo.png',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/app_logo.png', fit: BoxFit.cover),
           ),
         ),
       ),
@@ -324,17 +321,34 @@ class _OracleBubble extends StatelessWidget {
                 _RichOracleText(text: message.text),
                 if (message.actionButtons != null) ...[
                   const SizedBox(height: AppDimensions.spaceM),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: message.actionButtons!
-                        .map(
-                          (btn) => _ActionButton(
-                            label: btn,
-                            onTap: () => onAction?.call(btn),
-                          ),
-                        )
-                        .toList(),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final safeMaxWidth = constraints.maxWidth > 0
+                          ? constraints.maxWidth
+                          : MediaQuery.sizeOf(context).width;
+                      final buttonMaxWidth = (safeMaxWidth - 8).clamp(
+                        120.0,
+                        220.0,
+                      );
+
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: message.actionButtons!
+                            .map(
+                              (btn) => ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: buttonMaxWidth,
+                                ),
+                                child: _ActionButton(
+                                  label: btn,
+                                  onTap: () => onAction?.call(btn),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      );
+                    },
                   ),
                 ],
                 if (message.dataCard != null) ...[
@@ -411,7 +425,7 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
           border: Border.all(color: AppColors.cyberBlue),
@@ -419,6 +433,8 @@ class _ActionButton extends StatelessWidget {
         ),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: AppTextStyles.labelMedium.copyWith(
             color: AppColors.cyberBlue,
             fontSize: 13,
@@ -451,18 +467,28 @@ class _DataCardWidget extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                card.label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  letterSpacing: 1.5,
+              Expanded(
+                child: Text(
+                  card.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    letterSpacing: 1.5,
+                  ),
                 ),
               ),
-              Text(
-                card.value,
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: AppColors.neonLime,
-                  fontSize: 15,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  card.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.neonLime,
+                    fontSize: 15,
+                  ),
                 ),
               ),
             ],

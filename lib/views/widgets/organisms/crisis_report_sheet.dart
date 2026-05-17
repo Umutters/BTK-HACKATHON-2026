@@ -300,7 +300,7 @@ class _CrisisReportSheetState extends State<CrisisReportSheet> {
                           const SizedBox(height: AppDimensions.spaceS),
                           Text(
                             _amount > 0
-                                ? 'Oracle bu tutarın 2045 hedefine etkisini analiz edecek.'
+                                ? 'Oracle bu tutarın uzun vadeli plana etkisini analiz edecek.'
                                 : 'Kriz tutarını gir, Oracle stratejini belirlesin.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodySmall.copyWith(

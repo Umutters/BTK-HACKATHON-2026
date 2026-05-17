@@ -49,7 +49,6 @@ class OracleViewModel extends ChangeNotifier {
   bool _isOracleTyping = false;
   bool _isInitialized = false;
   String? _initError;
-  bool _contextLoaded = false;
 
   // Supabase'den çekilen veriyi cache'le — clearChat yeniden init edebilsin
   ProfileModel? _cachedProfile;
@@ -79,6 +78,14 @@ class OracleViewModel extends ChangeNotifier {
        _dataSource = dataSource ?? SupabaseDataSource(),
        _localDataSource = localDataSource ?? LocalDataSource() {
     _initialize();
+  }
+
+  void _clearCachedContext() {
+    _cachedProfile = null;
+    _cachedTransactions = [];
+    _cachedLogs = [];
+    _cachedRules = [];
+    _cachedGoalName = '';
   }
 
   Future<void> _initialize() async {
@@ -126,7 +133,6 @@ class OracleViewModel extends ChangeNotifier {
           rules: rules,
           goalName: goalName,
         );
-        _contextLoaded = true;
 
         final income = transactions
             .where((t) => t.isIncome)
@@ -150,10 +156,12 @@ class OracleViewModel extends ChangeNotifier {
           ],
         );
       } else {
+        _clearCachedContext();
         _seedFallbackMessages();
       }
     } catch (e) {
       _initError = e.toString();
+      _clearCachedContext();
       if (_messages.isEmpty) _seedFallbackMessages();
     } finally {
       _isInitialized = true;
@@ -161,7 +169,13 @@ class OracleViewModel extends ChangeNotifier {
       if (_scheduledCrisisInjection != null) {
         final crisis = _scheduledCrisisInjection!;
         _scheduledCrisisInjection = null;
-        unawaited(_doInjectCrisis(crisis));
+        if (_cachedProfile != null) {
+          unawaited(_doInjectCrisis(crisis));
+        } else {
+          _addOracleMessage(
+            'Kriz analizi için finansal profil verileri yüklenemedi. Lütfen sohbeti yenileyip tekrar dene.',
+          );
+        }
       }
       notifyListeners();
     }
@@ -245,7 +259,6 @@ class OracleViewModel extends ChangeNotifier {
           rules: rules,
           goalName: goalName,
         );
-        _contextLoaded = true;
 
         final income = transactions
             .where((t) => t.isIncome)
@@ -268,9 +281,11 @@ class OracleViewModel extends ChangeNotifier {
           ],
         );
       } else {
+        _clearCachedContext();
         _seedFallbackMessages();
       }
     } catch (e) {
+      _clearCachedContext();
       _seedFallbackMessages();
     } finally {
       notifyListeners();
@@ -282,10 +297,19 @@ class OracleViewModel extends ChangeNotifier {
   /// Dashboard'dan tetiklenir: kriz olayını Oracle'a inject eder.
   /// Oracle henüz init olmadıysa, init tamamlanınca otomatik çalışır.
   Future<void> injectCrisisEvent(CrisisEventModel crisis) async {
-    if (!_isInitialized || _cachedProfile == null) {
+    if (!_isInitialized) {
       _scheduledCrisisInjection = crisis;
       return;
     }
+
+    if (_cachedProfile == null) {
+      _addOracleMessage(
+        'Kriz senaryosu için gerekli finansal veriler hazır değil. Lütfen sohbeti yenileyip tekrar dene.',
+      );
+      notifyListeners();
+      return;
+    }
+
     await _doInjectCrisis(crisis);
   }
 
@@ -323,7 +347,7 @@ class OracleViewModel extends ChangeNotifier {
         '2. 💰 Anlık bütçeden karşıla ($balanceStr TL mevcut)\n\n'
         'Lütfen şunları analiz et:\n'
         '- İlk paragrafta mutlaka son 7 gün verilerini kullanarak kullanıcıya "yüzleşme" cümlesi kur\n'
-        '- Bu krizin 2045 hedefine etkisi nedir?\n'
+        '- Bu krizin uzun vadeli finans planına etkisi nedir?\n'
         '- Hangi stratejiyle karşılamalı ve neden?\n'
         '- Bu durumdan sonra toparlanmak için 1-2 somut öneri ver.\n'
         'Yanıtın 3-4 paragraf uzunluğunda, dramatik ama yapıcı olsun.';
@@ -444,21 +468,36 @@ class OracleViewModel extends ChangeNotifier {
   Future<void> _resolvePendingCrisis(String strategy) async {
     final crisis = _pendingCrisis;
     if (crisis == null) return;
-    _pendingCrisis = null;
 
     final userId = SupabaseService.instance.currentUserId;
-    if (userId == null || _cachedProfile == null) return;
+    if (userId == null || _cachedProfile == null) {
+      _addOracleMessage(
+        'Kriz çözümü uygulanamadı: oturum veya profil bilgisi eksik.',
+      );
+      notifyListeners();
+      return;
+    }
+
+    _pendingCrisis = null;
 
     _isOracleTyping = true;
     notifyListeners();
 
     try {
+      final profile = _cachedProfile!;
+      var nextBalance = profile.currentBalance;
+      var nextPool = profile.savingsPool;
+
       if (strategy == 'pool') {
         await SupabaseService.instance.addToSavingsPool(userId, -crisis.amount);
+        nextPool = (nextPool - crisis.amount).clamp(0.0, double.maxFinite);
       } else {
-        final newBalance = (_cachedProfile!.currentBalance - crisis.amount)
-            .clamp(0.0, double.maxFinite);
+        final newBalance = (nextBalance - crisis.amount).clamp(
+          0.0,
+          double.maxFinite,
+        );
         await SupabaseService.instance.updateBalance(userId, newBalance);
+        nextBalance = newBalance;
       }
 
       await SupabaseService.instance.updateCrisisResolution(
@@ -466,15 +505,28 @@ class OracleViewModel extends ChangeNotifier {
         strategy,
       );
 
-      final newXp = (_cachedProfile?.xp ?? 0) + 75;
+      final newXp = profile.xp + 75;
       await SupabaseService.instance.updateXp(userId, newXp);
+
+      _cachedProfile = ProfileModel(
+        id: profile.id,
+        userName: profile.userName,
+        age: profile.age,
+        gender: profile.gender,
+        initialBalance: profile.initialBalance,
+        currentBalance: nextBalance,
+        savingsPool: nextPool,
+        level: profile.level,
+        xp: newXp,
+        dailyLimit: profile.dailyLimit,
+      );
 
       final sourceLabel = strategy == 'pool' ? 'Birikim Havuzu' : 'Bütçe';
       final amountStr = crisis.amount.toStringAsFixed(0);
       _addOracleMessage(
         '✅ **${crisis.eventName}** krizi $sourceLabel\'ndan karşılandı ($amountStr TL).\n'
         '⚡ **+75 XP** kazandın — kriz yönetimi finansal farkındalığın kanıtı.\n'
-        'Toparlanma önerilerini uygulamaya başlarsan 2045 hedefine olan etkiyi minimize edersin.',
+        'Toparlanma önerilerini uygulamaya başlarsan uzun vadeli etkiyi minimize edersin.',
       );
     } catch (e) {
       _addOracleMessage('İşlem sırasında bir hata oluştu: ${e.toString()}');

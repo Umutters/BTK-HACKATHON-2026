@@ -41,17 +41,48 @@ class MainNavigation extends StatelessWidget {
             completeQuestUseCase: CompleteQuestUseCase(questRepo),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => SimulationViewModel()),
-        ChangeNotifierProvider(create: (_) => RecurringRulesViewModel()),
-        ChangeNotifierProvider(create: (_) => OracleViewModel()),
+        ChangeNotifierProvider(
+          lazy: true,
+          create: (_) => SimulationViewModel(),
+        ),
+        ChangeNotifierProvider(
+          lazy: true,
+          create: (_) => RecurringRulesViewModel(),
+        ),
+        ChangeNotifierProvider(lazy: true, create: (_) => OracleViewModel()),
       ],
       child: const _NavigationShell(),
     );
   }
 }
 
-class _NavigationShell extends StatelessWidget {
+class _NavigationShell extends StatefulWidget {
   const _NavigationShell();
+
+  @override
+  State<_NavigationShell> createState() => _NavigationShellState();
+}
+
+class _NavigationShellState extends State<_NavigationShell> {
+  final Map<int, Widget> _screenCache = {0: const HomeScreen()};
+
+  Widget _buildScreen(int index) {
+    return switch (index) {
+      0 => const HomeScreen(),
+      1 => const AiOracleScreen(),
+      2 => const SimulationScreen(),
+      3 => const SettingsScreen(),
+      _ => const HomeScreen(),
+    };
+  }
+
+  List<Widget> _buildIndexedChildren(int currentIndex) {
+    _screenCache.putIfAbsent(currentIndex, () => _buildScreen(currentIndex));
+
+    return List<Widget>.generate(4, (index) {
+      return _screenCache[index] ?? const SizedBox.shrink();
+    });
+  }
 
   Future<void> _showTransactionSheet(BuildContext context) async {
     HapticFeedback.mediumImpact();
@@ -69,24 +100,20 @@ class _NavigationShell extends StatelessWidget {
       homeVm.applyTransactionDelta(result.balanceDelta);
       await homeVm.processSavingsTransfer(result.transferredToSavings);
       await homeVm.refreshTransactions();
-      await context.read<SimulationViewModel>().refresh();
+      if (_screenCache.containsKey(2)) {
+        await context.read<SimulationViewModel>().refresh();
+      }
     }
   }
-
-  static const List<Widget> _screens = [
-    HomeScreen(),
-    AiOracleScreen(),
-    SimulationScreen(),
-    SettingsScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
     return Consumer<NavigationViewModel>(
       builder: (context, vm, _) {
+        final screens = _buildIndexedChildren(vm.currentIndex);
         return Scaffold(
           extendBody: true,
-          body: IndexedStack(index: vm.currentIndex, children: _screens),
+          body: IndexedStack(index: vm.currentIndex, children: screens),
           floatingActionButton: vm.currentIndex != 0
               ? null
               : AnimatedSlide(

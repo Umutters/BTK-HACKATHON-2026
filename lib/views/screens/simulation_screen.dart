@@ -126,7 +126,7 @@ class _TargetProjectionHeader extends StatelessWidget {
     return Column(
       children: [
         Text(
-          '2045 OPTİMİZE HEDEF',
+          '5 YILLIK FİNANS ROTASI',
           style: AppTextStyles.labelSmall.copyWith(
             color: AppColors.onSurfaceVariant,
             letterSpacing: 2.0,
@@ -318,7 +318,7 @@ class _ProjectionChartCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '2045',
+                '${vm.endYear}',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: AppColors.cyberBlueDim,
                   fontSize: 11,

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../data/datasources/local_datasource.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/recurring_transaction_model.dart';
+import '../../../data/services/gemini_service.dart';
 import '../../../data/services/supabase_service.dart';
 
 class QuickTransactionResult {
@@ -55,6 +57,14 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
   ProfileModel? _profile;
   bool _isSaving = false;
   bool _isScanning = false;
+  final GeminiService _geminiService = GeminiService();
+  Timer? _previewDebounce;
+  String? _aiSimulationPreview;
+  String? _scanAnalysis;
+  bool _isAiPreviewLoading = false;
+  bool _isScanAnalysisLoading = false;
+  int _previewRequestId = 0;
+  int _scanRequestId = 0;
 
   List<_CategoryData> get _categories => _entryType == _EntryType.expense
       ? _expenseCategories
@@ -72,6 +82,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     final profile = await LocalDataSource().getProfile();
     if (!mounted) return;
     setState(() => _profile = profile);
+    _schedulePreviewAnalysis();
   }
 
   double get _amount => double.tryParse(_amountDigits) ?? 0.0;
@@ -81,9 +92,9 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     return value == 0 ? '0' : value.toString();
   }
 
-  String get _simulationPreview {
+  String get _fallbackSimulationPreview {
     if (_amount <= 0) {
-      return 'Tutar girince 2045 hedefine etkisini anında göstereceğiz.';
+      return 'Tutar girince uzun vade etkisini anında göstereceğiz.';
     }
 
     if (_entryType == _EntryType.income) {
@@ -98,7 +109,66 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     final dailyLimit = (_profile?.dailyLimit ?? 0).clamp(0.0, double.infinity);
     final divisor = dailyLimit > 0 ? max(dailyLimit * 0.35, 1.0) : 250.0;
     final days = max(1, (_amount / divisor).ceil());
-    return 'Bu harcama 2045 hedefini $days gün geciktirecek.';
+    return 'Bu harcama finansal rotanı yaklaşık $days gün geciktirebilir.';
+  }
+
+  String get _simulationPreview =>
+      _aiSimulationPreview ?? _fallbackSimulationPreview;
+
+  void _schedulePreviewAnalysis() {
+    _previewDebounce?.cancel();
+
+    if (_amount <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _isAiPreviewLoading = false;
+        _aiSimulationPreview = null;
+      });
+      return;
+    }
+
+    _previewDebounce = Timer(
+      const Duration(milliseconds: 550),
+      _analyzePreviewWithGemini,
+    );
+  }
+
+  Future<void> _analyzePreviewWithGemini() async {
+    final amount = _amount;
+    if (amount <= 0) return;
+
+    final requestId = ++_previewRequestId;
+    if (mounted) {
+      setState(() => _isAiPreviewLoading = true);
+    }
+
+    try {
+      final profile = _profile;
+      final preview = await _geminiService.generateQuickTransactionPreview(
+        entryType: switch (_entryType) {
+          _EntryType.expense => 'Gider',
+          _EntryType.income => 'Gelir',
+          _EntryType.savings => 'Birikim',
+        },
+        category: _categories[_selectedCategoryIndex].label,
+        amount: amount,
+        currentBalance: profile?.currentBalance ?? 0,
+        savingsPool: profile?.savingsPool ?? 0,
+        dailyLimit: profile?.dailyLimit ?? 0,
+      );
+
+      if (!mounted || requestId != _previewRequestId) return;
+      setState(() {
+        _aiSimulationPreview = preview;
+        _isAiPreviewLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _previewRequestId) return;
+      setState(() {
+        _aiSimulationPreview = null;
+        _isAiPreviewLoading = false;
+      });
+    }
   }
 
   void _setEntryType(_EntryType type) {
@@ -107,7 +177,11 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     setState(() {
       _entryType = type;
       _selectedCategoryIndex = 0;
+      _aiSimulationPreview = null;
+      _scanAnalysis = null;
+      _isScanAnalysisLoading = false;
     });
+    _schedulePreviewAnalysis();
   }
 
   void _addDigit(String digit) {
@@ -118,7 +192,11 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
       } else {
         _amountDigits += digit;
       }
+      _aiSimulationPreview = null;
+      _scanAnalysis = null;
+      _isScanAnalysisLoading = false;
     });
+    _schedulePreviewAnalysis();
   }
 
   void _backspace() {
@@ -129,12 +207,22 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
       } else {
         _amountDigits = _amountDigits.substring(0, _amountDigits.length - 1);
       }
+      _aiSimulationPreview = null;
+      _scanAnalysis = null;
+      _isScanAnalysisLoading = false;
     });
+    _schedulePreviewAnalysis();
   }
 
   void _clear() {
     HapticFeedback.selectionClick();
-    setState(() => _amountDigits = '0');
+    setState(() {
+      _amountDigits = '0';
+      _aiSimulationPreview = null;
+      _scanAnalysis = null;
+      _isScanAnalysisLoading = false;
+    });
+    _schedulePreviewAnalysis();
   }
 
   Future<void> _scanReceipt() async {
@@ -142,16 +230,46 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     setState(() => _isScanning = true);
     await Future<void>.delayed(const Duration(milliseconds: 650));
     if (!mounted) return;
-    setState(() {
-      _amountDigits = '459';
-      _selectedCategoryIndex = 0;
-      _isScanning = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Gemini Scan demo: 459 TL / Kahve algılandı'),
-      ),
+
+    final amount = _amount;
+    if (amount <= 0) {
+      setState(() {
+        _isScanning = false;
+        _scanAnalysis = 'Gemini Scan için önce bir tutar gir.';
+      });
+      return;
+    }
+
+    final requestId = ++_scanRequestId;
+    if (mounted) {
+      setState(() {
+        _isScanning = false;
+        _isScanAnalysisLoading = true;
+        _scanAnalysis = null;
+      });
+    }
+
+    final profile = _profile;
+    final analysis = await _geminiService.generateQuickScanAnalysis(
+      entryType: switch (_entryType) {
+        _EntryType.expense => 'Gider',
+        _EntryType.income => 'Gelir',
+        _EntryType.savings => 'Birikim',
+      },
+      category: _categories[_selectedCategoryIndex].label,
+      amount: amount,
+      currentBalance: profile?.currentBalance ?? 0,
+      savingsPool: profile?.savingsPool ?? 0,
+      dailyLimit: profile?.dailyLimit ?? 0,
     );
+
+    if (!mounted || requestId != _scanRequestId) return;
+    setState(() {
+      _scanAnalysis =
+          analysis ??
+          'Gemini şu an kısa analizi veremedi. Mevcut tutar üzerinden devam edebilirsin.';
+      _isScanAnalysisLoading = false;
+    });
   }
 
   Future<void> _saveTransaction() async {
@@ -228,7 +346,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
               userId: authUserId,
               spentAmount: _amount,
               transferredToSavings: 0,
-              dailyLimit: profile?.dailyLimit,
+              dailyLimit: profile.dailyLimit,
             );
           } else if (_entryType == _EntryType.savings) {
             await SupabaseService.instance.insertDailyLog(
@@ -263,6 +381,12 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _previewDebounce?.cancel();
+    super.dispose();
   }
 
   @override
@@ -440,13 +564,22 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                             _simulationPreview,
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.cyberBlueDim,
+                              color: _isAiPreviewLoading
+                                  ? AppColors.onSurfaceVariant
+                                  : AppColors.cyberBlueDim,
                               height: 1.4,
                             ),
                           ),
                         ],
                       ),
                     ),
+                    if (_scanAnalysis != null || _isScanAnalysisLoading) ...[
+                      const SizedBox(height: AppDimensions.spaceM),
+                      _GeminiBubble(
+                        isLoading: _isScanAnalysisLoading,
+                        text: _scanAnalysis,
+                      ),
+                    ],
                     const SizedBox(height: AppDimensions.spaceXL),
                     Text(
                       'Kategori seç',
@@ -465,7 +598,11 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                           selected: selected,
                           onSelected: (_) {
                             HapticFeedback.selectionClick();
-                            setState(() => _selectedCategoryIndex = index);
+                            setState(() {
+                              _selectedCategoryIndex = index;
+                              _aiSimulationPreview = null;
+                            });
+                            _schedulePreviewAnalysis();
                           },
                           label: Text(item.label),
                           avatar: Icon(
@@ -637,6 +774,88 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GeminiBubble extends StatelessWidget {
+  final bool isLoading;
+  final String? text;
+
+  const _GeminiBubble({required this.isLoading, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLow,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(4),
+              topRight: Radius.circular(18),
+              bottomLeft: Radius.circular(18),
+              bottomRight: Radius.circular(18),
+            ),
+            border: Border.all(color: AppColors.cyberBlue20),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x22000000),
+                blurRadius: 16,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [AppColors.cyberBlue, AppColors.neonLime],
+                  ),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 16,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Gemini',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.cyberBlue,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isLoading
+                          ? 'Analiz ediliyor...'
+                          : (text ?? 'Analiz alınamadı.'),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.onSurface,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

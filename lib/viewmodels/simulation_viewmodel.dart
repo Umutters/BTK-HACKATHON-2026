@@ -4,60 +4,42 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../data/datasources/local_datasource.dart';
+import '../data/datasources/supabase_datasource.dart';
+import '../data/models/crisis_event_model.dart';
+import '../data/models/crisis_marker.dart';
 import '../data/models/daily_log_model.dart';
+import '../data/models/decision_log_model.dart';
 import '../data/models/profile_model.dart';
+import '../data/models/projection_point.dart';
+import '../data/models/projection_table_row.dart';
 import '../data/models/recurring_transaction_model.dart';
+import '../data/models/simulation_series_point.dart';
+import '../data/models/transaction_impact.dart';
+import '../data/repositories/simulation_repository.dart';
+import '../data/services/financial_simulation_engine.dart';
 import '../data/services/gemini_service.dart';
 
-class ProjectionPoint {
-  final int year;
-  final double amountMillions;
-
-  const ProjectionPoint(this.year, this.amountMillions);
-}
-
-class TransactionImpact {
-  final String category;
-  final String type;
-  final double monthlyImpact;
-  final double annualImpact;
-  final double sharePercent;
-
-  const TransactionImpact({
-    required this.category,
-    required this.type,
-    required this.monthlyImpact,
-    required this.annualImpact,
-    required this.sharePercent,
-  });
-}
-
-class ProjectionTableRow {
-  final int year;
-  final double projectedMillions;
-  final double goalGapMillions;
-
-  const ProjectionTableRow({
-    required this.year,
-    required this.projectedMillions,
-    required this.goalGapMillions,
-  });
-}
-
 class SimulationViewModel extends ChangeNotifier {
-  final LocalDataSource _localDataSource;
-  final GeminiService _geminiService;
-  final DateTime Function() _now;
-
   static const double _defaultAnnualReturnRate = 0.08;
 
+  final GeminiService _geminiService;
+  final DateTime Function() _now;
+  final SimulationRepository _simulationRepository;
+  final FinancialSimulationEngine _simulationEngine;
+
   late final int _startYear;
-  late final int _endYear;
-  late final int _routeYears;
+  late int _endYear;
+  late int _routeYears;
 
   List<ProjectionPoint> _currentPoints = const [];
   List<ProjectionPoint> _optimizedPoints = const [];
+  List<SimulationSeriesPoint> _currentSeries = const [];
+  List<SimulationSeriesPoint> _optimizedSeries = const [];
   List<TransactionImpact> _transactionImpacts = const [];
+  List<CrisisEventModel> _crisisEvents = const [];
+  List<DecisionLogModel> _decisionLogs = const [];
+  List<CrisisMarker> _crisisMarkers = const [];
+
   double _extraDailySavings = 0.0;
   double _annualReturnRateSlider = _defaultAnnualReturnRate;
   bool _isLoading = true;
@@ -65,8 +47,16 @@ class SimulationViewModel extends ChangeNotifier {
 
   double _goalMillions = 0.0;
   double _monthlySurplus = 0.0;
+  double _monthlyIncome = 0.0;
+  double _monthlyExpense = 0.0;
+  double _monthlySavingsTransfer = 0.0;
+  double _monthlyNetCashflow = 0.0;
+  double _savingsRatePercent = 0.0;
+  double _emergencyRunwayMonths = 0.0;
+  double _safeMonthlyBudget = 0.0;
   double _avgDailyTransferred30 = 0.0;
   double _avgDailyTransferred7 = 0.0;
+
   String _goalName = 'Finansal Hedef';
   String _goalId = '';
   String _currencyCode = 'TRY';
@@ -78,33 +68,60 @@ class SimulationViewModel extends ChangeNotifier {
 
   SimulationViewModel({
     LocalDataSource? localDataSource,
+    SupabaseDataSource? supabaseDataSource,
     GeminiService? geminiService,
+    SimulationRepository? simulationRepository,
+    FinancialSimulationEngine? simulationEngine,
     DateTime Function()? now,
-  }) : _localDataSource = localDataSource ?? LocalDataSource(),
-       _geminiService = geminiService ?? GeminiService(),
-       _now = now ?? DateTime.now {
+  }) : _geminiService = geminiService ?? GeminiService(),
+       _now = now ?? DateTime.now,
+       _simulationRepository =
+           simulationRepository ??
+           SimulationRepository(
+             localDataSource: localDataSource,
+             supabaseDataSource: supabaseDataSource,
+           ),
+       _simulationEngine =
+           simulationEngine ??
+           FinancialSimulationEngine(now: now ?? DateTime.now) {
     _startYear = _now().year;
-    _routeYears = 5;
+    _routeYears = 20;
     _endYear = _startYear + _routeYears;
     _bootstrap();
   }
 
   bool get isLoading => _isLoading;
   bool get isGeneratingAi => _isGeneratingAi;
-
   double get extraDailySavings => _extraDailySavings;
   double get annualReturnRateSlider => _annualReturnRateSlider;
   int get startYear => _startYear;
   int get endYear => _endYear;
+  int get routeYears => _routeYears;
+  int? get targetAge {
+    final age = _profile?.age;
+    return age == null ? null : age + _routeYears;
+  }
+
   double get goalMillions => _goalMillions;
   String get goalName => _goalName;
   String get currencySymbol => _currencyCode == 'USD' ? r'$' : 'TL';
   double get monthlySurplus => _monthlySurplus;
+  double get monthlyIncome => _monthlyIncome;
+  double get monthlyExpense => _monthlyExpense;
+  double get monthlySavingsTransfer => _monthlySavingsTransfer;
+  double get monthlyNetCashflow => _monthlyNetCashflow;
+  double get savingsRatePercent => _savingsRatePercent;
+  double get emergencyRunwayMonths => _emergencyRunwayMonths;
+  double get safeMonthlyBudget => _safeMonthlyBudget;
   double get avgDailyTransferred30 => _avgDailyTransferred30;
   double get avgDailyTransferred7 => _avgDailyTransferred7;
   List<TransactionImpact> get transactionImpacts => _transactionImpacts;
+  List<CrisisEventModel> get crisisEvents => _crisisEvents;
+  List<CrisisMarker> get crisisMarkers => _crisisMarkers;
   List<ProjectionPoint> get currentPoints => _currentPoints;
   List<ProjectionPoint> get optimizedPoints => _optimizedPoints;
+  List<SimulationSeriesPoint> get currentSeries => _currentSeries;
+  List<SimulationSeriesPoint> get optimizedSeries => _optimizedSeries;
 
   List<ProjectionTableRow> get projectionRows {
     return visiblePoints
@@ -125,13 +142,6 @@ class SimulationViewModel extends ChangeNotifier {
     return _optimizedPoints.last.amountMillions;
   }
 
-  String get formattedTarget {
-    final m = targetAmountMillions;
-    if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)}B $currencySymbol';
-    if (m >= 1) return '${m.toStringAsFixed(1)}M $currencySymbol';
-    return '${(m * 1000).toStringAsFixed(0)}K $currencySymbol';
-  }
-
   int get aiGoalYear {
     for (final pt in _optimizedPoints) {
       if (pt.amountMillions >= _goalMillions) return pt.year;
@@ -143,25 +153,39 @@ class SimulationViewModel extends ChangeNotifier {
 
   void setExtraDailySavings(double value) {
     _extraDailySavings = value.clamp(0, 500);
-    _rebuildOptimized();
+    _rebuildProjection();
     notifyListeners();
+    unawaited(generateAiInsight());
   }
 
   void setAnnualReturnRate(double value) {
     _annualReturnRateSlider = value.clamp(0.05, 0.25);
-    _rebuildOptimized();
+    _rebuildProjection();
     notifyListeners();
+    unawaited(generateAiInsight());
   }
 
   void setRetirementGoal(double millions) {
     _goalMillions = millions.clamp(0.1, 20.0);
     notifyListeners();
+    unawaited(generateAiInsight());
   }
 
+  void setProjectionHorizonYears(double years) {
+    final nextYears = years.round().clamp(5, 30);
+    if (nextYears == _routeYears) return;
+    _routeYears = nextYears;
+    _endYear = _startYear + _routeYears;
+    _rebuildProjection();
+    _aiInsightOverride = null;
+    notifyListeners();
+    unawaited(generateAiInsight());
+  }
+
+  Future<void> refresh() => _bootstrap();
+
   Future<void> generateAiInsight() async {
-    if (_profile == null || _currentPoints.isEmpty) {
-      return;
-    }
+    if (_profile == null || _currentPoints.isEmpty) return;
 
     _isGeneratingAi = true;
     notifyListeners();
@@ -191,264 +215,68 @@ class SimulationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refresh() => _bootstrap();
-
   Future<void> _bootstrap() async {
     _isLoading = true;
     notifyListeners();
 
-    _profile = await _localDataSource.getProfile();
-    _transactions = await _localDataSource.getRecurringTransactions();
-    _logs = await _localDataSource.getRecentDailyLogs(days: 30);
-    _currencyCode = await _localDataSource.getPreferredCurrency();
-    final selectedGoal = await _localDataSource.getSelectedGoal();
+    _profile = await _simulationRepository.getUserProfile();
+    _transactions = await _simulationRepository.getRecurringTransactions();
+    _logs = await _simulationRepository.getRecentLogs(days: 30);
+
+    final groundedSignals = await _simulationRepository.getGroundedSignals();
+    _crisisEvents = groundedSignals.crisisEvents;
+    _decisionLogs = groundedSignals.decisionLogs;
+
+    _currencyCode = await _simulationRepository.getPreferredCurrency();
+    final selectedGoal = await _simulationRepository.getSelectedGoal();
     _goalId = (selectedGoal['goalId'] ?? '').trim();
     _goalName = (selectedGoal['goalName'] ?? '').trim();
     if (_goalName.isEmpty) {
       _goalName = 'Finansal Hedef';
     }
 
-    _rebuildProjection(
-      profile: _profile,
-      transactions: _transactions,
-      logs: _logs,
-    );
+    _rebuildProjection();
 
     _aiInsightOverride = null;
-
     _isLoading = false;
     notifyListeners();
 
-    // AI analizi otomatik başlat — matematiksel model değil Gemini yorumlasın
     unawaited(generateAiInsight());
   }
 
-  void _rebuildProjection({
-    required ProfileModel? profile,
-    required List<RecurringTransactionModel> transactions,
-    required List<DailyLogModel> logs,
-  }) {
-    final baseAmount = _estimateBaseWealth(profile);
-    _monthlySurplus = _estimateMonthlySurplus(
-      profile: profile,
-      transactions: transactions,
-      logs: logs,
-    );
-    _avgDailyTransferred30 = logs.isEmpty
-        ? 0.0
-        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              logs.length;
-    _avgDailyTransferred7 = logs.isEmpty
-        ? 0.0
-        : logs.length >= 7
-        ? logs
-                  .take(7)
-                  .fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              7
-        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              logs.length;
-
-    _currentPoints = _buildFvCurve(
-      startYear: _startYear,
-      targetYear: _endYear,
-      initialAmount: baseAmount,
-      monthlyPmt: _monthlySurplus,
-      annualRate: _defaultAnnualReturnRate,
+  void _rebuildProjection() {
+    final computed = _simulationEngine.compute(
+      profile: _profile,
+      transactions: _transactions,
+      logs: _logs,
+      crisisEvents: _crisisEvents,
+      decisionLogs: _decisionLogs,
+      routeYears: _routeYears,
+      extraDailySavings: _extraDailySavings,
+      annualReturnRateSlider: _annualReturnRateSlider,
+      defaultAnnualReturnRate: _defaultAnnualReturnRate,
+      goalId: _goalId,
     );
 
-    _optimizedPoints = _buildFvCurve(
-      startYear: _startYear,
-      targetYear: _endYear,
-      initialAmount: baseAmount,
-      monthlyPmt: _monthlySurplus + _extraDailySavings * 30,
-      annualRate: _annualReturnRateSlider,
-    );
+    _monthlySurplus = computed.monthlySurplus;
+    _monthlyIncome = computed.monthlyIncome;
+    _monthlyExpense = computed.monthlyExpense;
+    _monthlySavingsTransfer = computed.monthlySavingsTransfer;
+    _monthlyNetCashflow = computed.monthlyNetCashflow;
+    _savingsRatePercent = computed.savingsRatePercent;
+    _emergencyRunwayMonths = computed.emergencyRunwayMonths;
+    _safeMonthlyBudget = computed.safeMonthlyBudget;
+    _avgDailyTransferred30 = computed.avgDailyTransferred30;
+    _avgDailyTransferred7 = computed.avgDailyTransferred7;
 
-    _transactionImpacts = _buildTransactionImpacts(transactions, logs, profile);
+    _currentPoints = computed.currentPoints;
+    _optimizedPoints = computed.optimizedPoints;
+    _currentSeries = computed.currentSeries;
+    _optimizedSeries = computed.optimizedSeries;
+    _crisisMarkers = computed.crisisMarkers;
+    _transactionImpacts = computed.transactionImpacts;
 
-    final startMillions = _currentPoints.isNotEmpty
-        ? _currentPoints.first.amountMillions
-        : 0;
-    final goalMultiplier = _goalMultiplierFor(_goalId);
-    final trendBoost = max(0, _monthlySurplus) * 24;
-    final goalFromProfile = (profile?.initialBalance ?? 0) * goalMultiplier;
-    final fallbackGoal = max(150000, max(goalFromProfile, trendBoost));
-    final goalMillions = max(startMillions + 0.1, fallbackGoal / 1000000);
-    _goalMillions = goalMillions.clamp(0.2, 20.0);
-  }
-
-  void _rebuildOptimized() {
-    if (_profile == null) return;
-    final baseAmount = _estimateBaseWealth(_profile);
-    _optimizedPoints = _buildFvCurve(
-      startYear: _startYear,
-      targetYear: _endYear,
-      initialAmount: baseAmount,
-      monthlyPmt: _monthlySurplus + _extraDailySavings * 30,
-      annualRate: _annualReturnRateSlider,
-    );
-  }
-
-  List<TransactionImpact> _buildTransactionImpacts(
-    List<RecurringTransactionModel> transactions,
-    List<DailyLogModel> logs,
-    ProfileModel? profile,
-  ) {
-    final rows = <TransactionImpact>[];
-
-    for (final t in transactions) {
-      final signedMonthly = (t.isIncome || t.isSaving) ? t.amount : -t.amount;
-      rows.add(
-        TransactionImpact(
-          category: t.category,
-          type: t.type,
-          monthlyImpact: signedMonthly,
-          annualImpact: signedMonthly * 12,
-          sharePercent: 0,
-        ),
-      );
-    }
-
-    if (logs.isNotEmpty) {
-      final avgDailySpent =
-          logs.fold<double>(0, (sum, l) => sum + l.spentAmount) / logs.length;
-      rows.add(
-        TransactionImpact(
-          category: 'Gunluk Harcama Ortalamasi',
-          type: 'expense',
-          monthlyImpact: -(avgDailySpent * 30),
-          annualImpact: -(avgDailySpent * 30 * 12),
-          sharePercent: 0,
-        ),
-      );
-
-      final avgDailyTransfer =
-          logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-          logs.length;
-      rows.add(
-        TransactionImpact(
-          category: 'Birikim Aktarim Ortalamasi',
-          type: 'saving',
-          monthlyImpact: avgDailyTransfer * 30,
-          annualImpact: avgDailyTransfer * 30 * 12,
-          sharePercent: 0,
-        ),
-      );
-    } else if ((profile?.dailyLimit ?? 0) > 0) {
-      final fallbackMonthlySpend = (profile!.dailyLimit * 30 * 0.8);
-      rows.add(
-        TransactionImpact(
-          category: 'Tahmini Gunluk Harcama',
-          type: 'expense',
-          monthlyImpact: -fallbackMonthlySpend,
-          annualImpact: -fallbackMonthlySpend * 12,
-          sharePercent: 0,
-        ),
-      );
-    }
-
-    final totalAbsAnnual = rows.fold<double>(
-      0,
-      (sum, e) => sum + e.annualImpact.abs(),
-    );
-
-    final withShare = rows
-        .map(
-          (e) => TransactionImpact(
-            category: e.category,
-            type: e.type,
-            monthlyImpact: e.monthlyImpact,
-            annualImpact: e.annualImpact,
-            sharePercent: totalAbsAnnual == 0
-                ? 0
-                : (e.annualImpact.abs() / totalAbsAnnual) * 100,
-          ),
-        )
-        .toList();
-
-    withShare.sort(
-      (a, b) => b.annualImpact.abs().compareTo(a.annualImpact.abs()),
-    );
-    return withShare;
-  }
-
-  double _estimateBaseWealth(ProfileModel? profile) {
-    if (profile == null) return 50000;
-    return max(0, profile.savingsPool + max(0, profile.currentBalance) * 0.25);
-  }
-
-  double _estimateMonthlySurplus({
-    required ProfileModel? profile,
-    required List<RecurringTransactionModel> transactions,
-    required List<DailyLogModel> logs,
-  }) {
-    final recurringIncome = transactions
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount);
-
-    final recurringExpense = transactions
-        .where((t) => t.isExpense)
-        .fold<double>(0, (sum, t) => sum + t.amount);
-
-    final dailyTransferAvg = logs.isEmpty
-        ? 0.0
-        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              logs.length;
-    final monthlyTransfers = dailyTransferAvg * 30;
-
-    if (logs.isNotEmpty) {
-      // Simülasyonun yakıtı: son 30 gündeki gerçek günlük aktarım ortalaması.
-      return recurringIncome - recurringExpense + monthlyTransfers;
-    }
-
-    final fallbackDailySpend = (profile?.dailyLimit ?? 0) * 0.8;
-    return recurringIncome - recurringExpense - (fallbackDailySpend * 30);
-  }
-
-  List<ProjectionPoint> _buildFvCurve({
-    required int startYear,
-    required int targetYear,
-    required double initialAmount,
-    required double monthlyPmt,
-    required double annualRate,
-  }) {
-    final points = <ProjectionPoint>[];
-    final totalYears = (targetYear - startYear).clamp(1, 50);
-    final r = annualRate / 12;
-    final p = max(0, initialAmount);
-
-    for (var y = 0; y <= totalYears; y++) {
-      final t = (y * 12).toDouble();
-      double fv;
-      if (r == 0) {
-        fv = p + monthlyPmt * t;
-      } else {
-        final cf = pow(1 + r, t);
-        fv = p * cf + monthlyPmt * (cf - 1) / r;
-      }
-      points.add(ProjectionPoint(startYear + y, max(0.0, fv) / 1000000));
-    }
-
-    return points;
-  }
-
-  double _goalMultiplierFor(String goalId) {
-    switch (goalId) {
-      case 'debt':
-        return 1.2;
-      case 'emergency':
-        return 1.5;
-      case 'education':
-        return 1.8;
-      case 'family':
-        return 2.0;
-      case 'digital':
-        return 2.2;
-      case 'startup':
-        return 2.7;
-      default:
-        return 2.0;
-    }
+    _goalMillions = computed.goalMillions;
   }
 
   String _formatCompactMoney(double amount) {

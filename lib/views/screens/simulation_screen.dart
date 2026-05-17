@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
@@ -37,6 +38,8 @@ class SimulationScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     _TargetProjectionHeader(vm: vm),
                     const SizedBox(height: 20),
+                    _FinanceSnapshotCard(vm: vm),
+                    const SizedBox(height: 16),
                     _SavingsAverageCard(vm: vm),
                     const SizedBox(height: 16),
                     _ProjectionChartCard(vm: vm),
@@ -126,24 +129,97 @@ class _TargetProjectionHeader extends StatelessWidget {
     return Column(
       children: [
         Text(
-          '5 YILLIK FİNANS ROTASI',
+          'FİNANSAL FOTOĞRAF',
           style: AppTextStyles.labelSmall.copyWith(
             color: AppColors.onSurfaceVariant,
             letterSpacing: 2.0,
           ),
         ),
         const SizedBox(height: 6),
+        Text(vm.goalName, style: AppTextStyles.titleLarge),
+        const SizedBox(height: 4),
         Text(
-          vm.formattedTarget,
-          style: const TextStyle(
-            fontFamily: 'Outfit',
-            fontSize: 52,
-            fontWeight: FontWeight.w800,
-            color: AppColors.onSurface,
-            height: 1.0,
+          '${vm.routeYears} yıllık ufuk • ${vm.startYear} - ${vm.endYear}${vm.targetAge != null ? ' • yaklaşık ${vm.targetAge} yaş' : ''}',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.onSurfaceVariant,
+            height: 1.4,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FinanceSnapshotCard extends StatelessWidget {
+  final SimulationViewModel vm;
+  const _FinanceSnapshotCard({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final monthlyNet = vm.monthlyNetCashflow;
+    final runway = vm.emergencyRunwayMonths;
+    final savingsRate = vm.savingsRatePercent;
+    final safeBudget = vm.safeMonthlyBudget;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spaceL),
+      decoration: BoxDecoration(
+        color: AppColors.glass08,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+        border: Border.all(color: AppColors.glass12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NAKİT AKIŞI ZEMİNİ',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.cyberBlueDim,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricBox(
+                  label: 'Aylık net akış',
+                  value:
+                      '${monthlyNet.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spaceM),
+              Expanded(
+                child: _MetricBox(
+                  label: 'Tasarruf oranı',
+                  value: '%${savingsRate.toStringAsFixed(1)}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spaceS),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricBox(
+                  label: 'Acil fon dayanıklılığı',
+                  value: '${runway.toStringAsFixed(1)} ay',
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spaceM),
+              Expanded(
+                child: _MetricBox(
+                  label: 'Güvenli aylık bütçe',
+                  value:
+                      '${safeBudget.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -183,7 +259,7 @@ class _SavingsAverageCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            ' 30 GÜNLÜK TASARRUF ORTALAMASI',
+            '30 GÜNLÜK GERÇEK TASARRUF ORTALAMASI',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.onSurfaceVariant,
               letterSpacing: 1.5,
@@ -201,7 +277,7 @@ class _SavingsAverageCard extends StatelessWidget {
               const SizedBox(width: AppDimensions.spaceM),
               Expanded(
                 child: _MetricBox(
-                  label: 'Aylık tasarruf',
+                  label: 'Aylık aktarım',
                   value:
                       '${monthly.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
                 ),
@@ -213,7 +289,7 @@ class _SavingsAverageCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _MetricBox(
-                  label: '7 GUN TREND',
+                  label: '7 günlük trend',
                   value:
                       '$trendArrow $trendText (%${trendDiff.toStringAsFixed(1)})',
                 ),
@@ -273,9 +349,32 @@ class _ProjectionChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentSpots = vm.currentSeries
+        .map((p) => FlSpot(p.monthIndex.toDouble(), p.amountMillions))
+        .toList();
+    final optimizedSpots = vm.optimizedSeries
+        .map((p) => FlSpot(p.monthIndex.toDouble(), p.amountMillions))
+        .toList();
+    final allValues = [
+      ...currentSpots.map((s) => s.y),
+      ...optimizedSpots.map((s) => s.y),
+      vm.goalMillions,
+    ];
+    final maxY = max(0.1, allValues.reduce(max) * 1.12);
+    final maxX = max(12, vm.routeYears * 12).toDouble();
+
+    final crisisLines = vm.crisisMarkers.map((marker) {
+      return VerticalLine(
+        x: marker.monthIndex.toDouble(),
+        color: AppColors.cyberMagenta.withAlpha(180),
+        strokeWidth: 1.2,
+        dashArray: [6, 6],
+      );
+    }).toList();
+
     return Container(
       width: double.infinity,
-      height: 220,
+      height: 320,
       padding: const EdgeInsets.all(AppDimensions.spaceL),
       decoration: BoxDecoration(
         color: AppColors.glass08,
@@ -285,242 +384,155 @@ class _ProjectionChartCard extends StatelessWidget {
       child: Column(
         children: [
           Expanded(
-            child: CustomPaint(
-              painter: _DualChartPainter(
-                currentPoints: vm.currentPoints,
-                optimizedPoints: vm.optimizedPoints,
-                goalMillions: vm.goalMillions,
+            child: LineChart(
+              LineChartData(
+                minX: 0,
+                maxX: maxX,
+                minY: 0,
+                maxY: maxY,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 4,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: AppColors.glass12,
+                    strokeWidth: 1,
+                    dashArray: [4, 6],
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 44,
+                      interval: maxY / 4,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toStringAsFixed(1)}M',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                            fontSize: 9,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      interval: 12,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0) {
+                          return Text(
+                            '${vm.startYear}',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.cyberBlueDim,
+                              fontSize: 10,
+                            ),
+                          );
+                        }
+
+                        if (value.toInt() % 12 != 0) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final year = vm.startYear + (value ~/ 12).toInt();
+                        return Text(
+                          '$year',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.cyberBlueDim,
+                            fontSize: 10,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                extraLinesData: ExtraLinesData(
+                  horizontalLines: [
+                    HorizontalLine(
+                      y: vm.goalMillions,
+                      color: AppColors.cyberMagenta.withAlpha(180),
+                      strokeWidth: 1.5,
+                      dashArray: [8, 6],
+                    ),
+                  ],
+                  verticalLines: crisisLines,
+                ),
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) => AppColors.surfaceContainerLow,
+                    getTooltipItems: (spots) {
+                      return spots.map((spot) {
+                        final isOptimized = spot.barIndex == 1;
+                        final color = isOptimized
+                            ? AppColors.neonLime
+                            : AppColors.cyberBlue;
+                        return LineTooltipItem(
+                          '${isOptimized ? 'Optimize' : 'Mevcut'}\n${spot.y.toStringAsFixed(2)}M ${vm.currencySymbol}',
+                          AppTextStyles.labelSmall.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: currentSpots,
+                    isCurved: true,
+                    barWidth: 2.5,
+                    color: AppColors.cyberBlue,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: AppColors.cyberBlue.withAlpha(24),
+                    ),
+                  ),
+                  LineChartBarData(
+                    spots: optimizedSpots,
+                    isCurved: true,
+                    barWidth: 3.0,
+                    color: AppColors.neonLime,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: AppColors.neonLime.withAlpha(20),
+                    ),
+                  ),
+                ],
               ),
-              child: const SizedBox.expand(),
             ),
           ),
           const SizedBox(height: 8),
-          // Legend
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+          Wrap(
+            spacing: 14,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: const [
               _LegendDot(color: AppColors.cyberBlue, label: 'Mevcut Rota'),
-              const SizedBox(width: 16),
               _LegendDot(color: AppColors.neonLime, label: 'Optimize Rota'),
-              const SizedBox(width: 16),
               _LegendDot(color: AppColors.cyberMagenta, label: 'Hedef'),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${vm.startYear}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.cyberBlueDim,
-                  fontSize: 11,
-                ),
-              ),
-              Text(
-                '${vm.endYear}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.cyberBlueDim,
-                  fontSize: 11,
-                ),
+              _LegendDot(
+                color: AppColors.cyberMagenta,
+                label: 'Kriz Kırılması',
               ),
             ],
           ),
         ],
       ),
     );
-  }
-}
-
-// ─── Dual Chart CustomPainter ─────────────────────────────────────────────────
-
-class _DualChartPainter extends CustomPainter {
-  final List<ProjectionPoint> currentPoints;
-  final List<ProjectionPoint> optimizedPoints;
-  final double goalMillions;
-
-  const _DualChartPainter({
-    required this.currentPoints,
-    required this.optimizedPoints,
-    required this.goalMillions,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (currentPoints.length < 2) return;
-
-    final allAmounts = [
-      ...currentPoints.map((p) => p.amountMillions),
-      if (optimizedPoints.isNotEmpty)
-        ...optimizedPoints.map((p) => p.amountMillions),
-      goalMillions,
-    ];
-
-    const minAmount = 0.0;
-    final maxAmount = allAmounts.reduce(max) * 1.08;
-    final amountRange = (maxAmount - minAmount).clamp(0.001, double.infinity);
-
-    final minYear = currentPoints.first.year.toDouble();
-    final maxYear = currentPoints.last.year.toDouble();
-    final yearRange = (maxYear - minYear).clamp(1.0, double.infinity);
-
-    const padL = 4.0, padR = 4.0, padT = 16.0, padB = 4.0;
-    final w = size.width - padL - padR;
-    final h = size.height - padT - padB;
-
-    double xPos(double year) => padL + ((year - minYear) / yearRange) * w;
-    double yPos(double amount) =>
-        padT + h * (1 - (amount - minAmount) / amountRange);
-
-    // ── Goal horizontal dashed line (cyberMagenta) ─────────────────────
-    final goalY = yPos(goalMillions);
-    if (goalY >= padT && goalY <= size.height - padB) {
-      final goalPaint = Paint()
-        ..color = AppColors.cyberMagenta.withAlpha(160)
-        ..strokeWidth = 1.5;
-      _drawDashedH(canvas, padL, size.width - padR, goalY, goalPaint);
-    }
-
-    // ── Current path (cyberBlue) ───────────────────────────────────────
-    _drawCurve(
-      canvas,
-      currentPoints,
-      xPos,
-      yPos,
-      color: AppColors.cyberBlue,
-      strokeWidth: 2.0,
-    );
-
-    // ── Optimized path (neonLime) ──────────────────────────────────────
-    if (optimizedPoints.length >= 2) {
-      _drawCurve(
-        canvas,
-        optimizedPoints,
-        xPos,
-        yPos,
-        color: AppColors.neonLime,
-        strokeWidth: 2.5,
-      );
-    }
-
-    // ── Endpoint dots ─────────────────────────────────────────────────
-    if (currentPoints.isNotEmpty) {
-      final ep = Offset(
-        xPos(currentPoints.last.year.toDouble()),
-        yPos(currentPoints.last.amountMillions),
-      );
-      canvas.drawCircle(
-        ep,
-        5,
-        Paint()..color = AppColors.cyberBlue.withAlpha(200),
-      );
-    }
-    if (optimizedPoints.isNotEmpty) {
-      final ep = Offset(
-        xPos(optimizedPoints.last.year.toDouble()),
-        yPos(optimizedPoints.last.amountMillions),
-      );
-      canvas.drawCircle(
-        ep,
-        12,
-        Paint()
-          ..color = AppColors.neonLime.withAlpha(50)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-      );
-      canvas.drawCircle(ep, 6, Paint()..color = AppColors.neonLime);
-      canvas.drawCircle(ep, 3, Paint()..color = AppColors.background);
-    }
-  }
-
-  void _drawCurve(
-    Canvas canvas,
-    List<ProjectionPoint> points,
-    double Function(double) xPos,
-    double Function(double) yPos, {
-    required Color color,
-    required double strokeWidth,
-  }) {
-    final path = _buildPath(points, xPos, yPos);
-
-    // Glow pass
-    for (int i = 2; i >= 1; i--) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withAlpha((18 + i * 22).round())
-          ..strokeWidth = strokeWidth + i * 4
-          ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-      );
-    }
-    // Main line
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..strokeWidth = strokeWidth
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  Path _buildPath(
-    List<ProjectionPoint> points,
-    double Function(double) xPos,
-    double Function(double) yPos,
-  ) {
-    final offsets = points
-        .map((p) => Offset(xPos(p.year.toDouble()), yPos(p.amountMillions)))
-        .toList();
-    final path = Path()..moveTo(offsets.first.dx, offsets.first.dy);
-    for (int j = 1; j < offsets.length; j++) {
-      final prev = offsets[j - 1];
-      final curr = offsets[j];
-      final cpx = (prev.dx + curr.dx) / 2;
-      path.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
-    }
-    return path;
-  }
-
-  void _drawDashedH(
-    Canvas canvas,
-    double x1,
-    double x2,
-    double y,
-    Paint paint,
-  ) {
-    const dashLen = 6.0, gapLen = 4.0;
-    double x = x1;
-    while (x < x2) {
-      canvas.drawLine(
-        Offset(x, y),
-        Offset((x + dashLen).clamp(x1, x2), y),
-        paint,
-      );
-      x += dashLen + gapLen;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DualChartPainter old) {
-    if (old.goalMillions != goalMillions) return true;
-    if (old.currentPoints.length != currentPoints.length) return true;
-    if (old.optimizedPoints.length != optimizedPoints.length) return true;
-    // Slider değişince nokta sayısı aynı kalır ama değerler değişir — son noktayı karşılaştır
-    if (currentPoints.isNotEmpty &&
-        old.currentPoints.isNotEmpty &&
-        old.currentPoints.last.amountMillions !=
-            currentPoints.last.amountMillions) {
-      return true;
-    }
-    if (optimizedPoints.isNotEmpty &&
-        old.optimizedPoints.isNotEmpty &&
-        old.optimizedPoints.last.amountMillions !=
-            optimizedPoints.last.amountMillions) {
-      return true;
-    }
-    return false;
   }
 }
 
@@ -801,7 +813,7 @@ class _TransactionBreakdownCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'TRANSACTION ETKI TABLOSU',
+            'AYLIK KALEM ETKISI',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.cyberBlueDim,
               letterSpacing: 1.2,
@@ -810,7 +822,7 @@ class _TransactionBreakdownCard extends StatelessWidget {
           const SizedBox(height: AppDimensions.spaceM),
           if (rows.isEmpty)
             Text(
-              'Tablo icin yeterli transaction verisi yok.',
+              'Kalem etkisini göstermek için yeterli işlem verisi yok.',
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.onSurfaceVariant,
               ),
@@ -864,6 +876,7 @@ class _TransactionBreakdownCard extends StatelessWidget {
 
 class _ProjectionTableCard extends StatelessWidget {
   final SimulationViewModel vm;
+
   const _ProjectionTableCard({required this.vm});
 
   @override
@@ -885,13 +898,13 @@ class _ProjectionTableCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'HEDEF TAHMIN TABLOSU',
+            '5 YILLIK TAHMİN TABLOSU',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.cyberBlueDim,
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: AppDimensions.spaceM),
+          const SizedBox(height: AppDimensions.spaceS),
           Row(
             children: [
               Expanded(
@@ -904,7 +917,7 @@ class _ProjectionTableCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  'PORTFOY',
+                  'PORTFÖY',
                   textAlign: TextAlign.right,
                   style: AppTextStyles.labelSmall.copyWith(
                     color: AppColors.onSurfaceVariant,
@@ -913,7 +926,7 @@ class _ProjectionTableCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  'HEDEF ACIGI',
+                  'HEDEF AÇIĞI',
                   textAlign: TextAlign.right,
                   style: AppTextStyles.labelSmall.copyWith(
                     color: AppColors.onSurfaceVariant,
@@ -994,11 +1007,23 @@ class _WhatIfSlidersPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'WHAT-IF ANALİZİ',
+            'SENARYO TESTİ',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.cyberBlueDim,
               letterSpacing: 1.5,
             ),
+          ),
+          const SizedBox(height: AppDimensions.spaceM),
+          _SliderRow(
+            label: 'Hedef Ufku (Yıl)',
+            value: vm.routeYears.toDouble(),
+            min: 5,
+            max: 30,
+            displayValue:
+                '${vm.routeYears} yıl${vm.targetAge != null ? ' • ${vm.targetAge} yaş' : ''}',
+            onChanged: (v) => context
+                .read<SimulationViewModel>()
+                .setProjectionHorizonYears(v),
           ),
           const SizedBox(height: AppDimensions.spaceM),
           _SliderRow(

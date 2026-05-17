@@ -8,10 +8,9 @@ import '../../domain/usecases/complete_quest_usecase.dart';
 import '../../domain/usecases/get_daily_quests_usecase.dart';
 import '../../domain/usecases/get_user_progress_usecase.dart';
 import '../../domain/usecases/start_quest_usecase.dart';
-import '../data/datasources/local_datasource.dart';
 import '../data/models/crisis_event_model.dart';
-import '../data/models/daily_log_model.dart';
 import '../data/models/recurring_transaction_model.dart';
+import '../data/repositories/home_repository.dart';
 import '../data/services/supabase_service.dart';
 
 enum HomeViewState { initial, loading, loaded, error }
@@ -21,7 +20,7 @@ class HomeViewModel extends ChangeNotifier {
   final GetDailyQuestsUseCase _getDailyQuestsUseCase;
   final StartQuestUseCase _startQuestUseCase;
   final CompleteQuestUseCase _completeQuestUseCase;
-  final LocalDataSource _localDataSource = LocalDataSource();
+  final HomeRepository _homeRepository;
 
   HomeViewState _state = HomeViewState.initial;
   UserEntity? _user;
@@ -55,10 +54,12 @@ class HomeViewModel extends ChangeNotifier {
     required GetDailyQuestsUseCase getDailyQuestsUseCase,
     required StartQuestUseCase startQuestUseCase,
     required CompleteQuestUseCase completeQuestUseCase,
+    HomeRepository? homeRepository,
   }) : _getUserProgressUseCase = getUserProgressUseCase,
        _getDailyQuestsUseCase = getDailyQuestsUseCase,
        _startQuestUseCase = startQuestUseCase,
-       _completeQuestUseCase = completeQuestUseCase;
+       _completeQuestUseCase = completeQuestUseCase,
+       _homeRepository = homeRepository ?? HomeRepository();
 
   Future<void> initialize({bool force = false}) async {
     if (_state == HomeViewState.loading) return;
@@ -69,70 +70,23 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final userId = SupabaseService.instance.currentUserId;
-      if (userId != null) {
-        try {
-          await SupabaseService.instance.reconcileDailySavingsAndXp(
-            userId: userId,
-            lookbackDays: 30,
-          );
-        } catch (_) {
-          // Reconcile best-effort; ekran açılışını bloklamasın.
-        }
-      } else {
-        try {
-          await _localDataSource.reconcileDailySavingsAndXp(lookbackDays: 30);
-        } catch (_) {
-          // Local reconcile best-effort.
-        }
-      }
+      await _homeRepository.reconcileDailySavingsAndXp(lookbackDays: 30);
 
       final results = await Future.wait([
         _getUserProgressUseCase(),
         _getDailyQuestsUseCase(),
-        _localDataSource.getRecurringTransactions(),
+        _homeRepository.getRecurringTransactions(),
       ]);
 
       _user = results[0] as UserEntity;
       _quests = results[1] as List<QuestEntity>;
       _setTransactions(results[2] as List<RecurringTransactionModel>);
-      _currencyCode = await _localDataSource.getPreferredCurrency();
+      _currencyCode = await _homeRepository.getPreferredCurrency();
 
-      final profile = userId == null
-          ? null
-          : await SupabaseService.instance.getProfile(userId);
-      if (profile != null) {
-        _currentBalance = profile.currentBalance;
-        _savingsPool = await SupabaseService.instance.getSavingsTotal(
-          userId!,
-        );
-      } else {
-        _currentBalance = 0;
-        _savingsPool = 0;
-      }
-
-      // Auto-apply any due recurring rules
-      if (userId != null) {
-        try {
-          final delta = await SupabaseService.instance.applyDueRules(userId);
-          if (delta != 0) {
-            _currentBalance = (_currentBalance + delta).clamp(
-              0.0,
-              double.maxFinite,
-            );
-          }
-        } catch (_) {
-          // Best-effort: don't fail initialization if auto-apply errors
-        }
-
-        try {
-          _crisisEvents = await SupabaseService.instance.getCrisisEvents(
-            userId,
-          );
-        } catch (_) {
-          _crisisEvents = [];
-        }
-      }
+      final financeSnapshot = await _homeRepository.getFinanceSnapshot();
+      _currentBalance = financeSnapshot.currentBalance;
+      _savingsPool = financeSnapshot.savingsPool;
+      _crisisEvents = financeSnapshot.crisisEvents;
 
       _state = HomeViewState.loaded;
     } catch (e) {
@@ -191,34 +145,11 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<double> _getTodayTransferredToSavings() async {
-    final userId = SupabaseService.instance.currentUserId;
-    final today = DateTime.now();
-    List<DailyLogModel> logs;
-    if (userId != null) {
-      try {
-        logs = await SupabaseService.instance.getRecentDailyLogs(
-          userId,
-          days: 1,
-        );
-      } catch (_) {
-        logs = await _localDataSource.getRecentDailyLogs(days: 1);
-      }
-    } else {
-      logs = await _localDataSource.getRecentDailyLogs(days: 1);
-    }
-
-    return logs
-        .where(
-          (l) =>
-              l.date.year == today.year &&
-              l.date.month == today.month &&
-              l.date.day == today.day,
-        )
-        .fold<double>(0, (sum, l) => sum + l.transferredToSavings);
+    return _homeRepository.getTodayTransferredToSavings();
   }
 
   Future<void> refreshTransactions() async {
-    final txns = await _localDataSource.getRecurringTransactions();
+    final txns = await _homeRepository.getRecurringTransactions();
     _setTransactions(txns);
     notifyListeners();
   }
@@ -281,10 +212,11 @@ class HomeViewModel extends ChangeNotifier {
         final userId = SupabaseService.instance.currentUserId;
         if (userId != null) {
           try {
-            await SupabaseService.instance.updateProfile(userId, {
-              'xp': nextXp,
-              'level': nextLevel,
-            });
+            await _homeRepository.updateXpAndLevel(
+              userId: userId,
+              xp: nextXp,
+              level: nextLevel,
+            );
           } catch (e) {
             debugPrint('XP Supabase güncellemesi başarısız: $e');
           }

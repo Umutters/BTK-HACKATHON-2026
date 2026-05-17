@@ -263,7 +263,7 @@ KURAL: Yanıtta sadece bu kullanıcının TL rakamlarını kullan. Markdown yıl
         .fold(0.0, (s, t) => s + t.amount);
 
     final fullPrompt =
-        '''Sen kısa ve net Türkçe finans yorumu yapan bir asistansın.
+        '''Sen kısa ve net Türkçe finans yorumu yapan bir asistansın. Yalnızca tek cümle yaz.
 
 Kullanıcı: ${profile.userName} | Bakiye: ${profile.currentBalance.toStringAsFixed(0)} TL | Günlük limit: ${profile.dailyLimit.toStringAsFixed(0)} TL
 Aylık gelir: ${income.toStringAsFixed(0)} TL | Aylık gider: ${expense.toStringAsFixed(0)} TL | Net surplus: ${monthlySurplus.toStringAsFixed(0)} TL
@@ -272,12 +272,7 @@ Hedef: $goalName — ${goalMillions.toStringAsFixed(1)}M TL | Tahmini ulaşma: $
 En etkili kalemler:
 $topDriverText
 
-Sadece şu 3 maddeyi yaz, madde başı dışında hiç ek cümle ekleme:
-1) En kritik 1 aksiyon — somut TL rakamı içersin
-2) Hedefi hızlandıracak 1 öneri — somut sayı içersin
-3) 1 risk uyarısı
-
-Kural: Yıldız (*) veya markdown kullanma. Her madde en fazla 2 cümle.''';
+Kural: 120 karakteri geçme. Somut TL rakamı kullan. Fırsat maliyeti, nakit akışı ve toparlanma hızından birini vurgula. Markdown kullanma.''';
 
     try {
       final model = GenerativeModel(
@@ -437,7 +432,7 @@ Görev:
     required double monthlySurplus,
   }) {
     final trend = monthlySurplus >= 0 ? 'pozitif' : 'negatif';
-    return '$goalName hedefi için mevcut trend $trend görünüyor. Bu gidişle $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M seviyesine ulaşma potansiyelin var. Hedefe daha hızlı gitmek için aylık net katkını en az 1000 TL artırmayı dene.';
+    return '$goalName için trend $trend; bu rotada $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M TL görebilirsin ve aylık katkını 1000 TL artırman toparlanmayı belirgin hızlandırır.';
   }
 
   String _freqLabel(String frequency) {

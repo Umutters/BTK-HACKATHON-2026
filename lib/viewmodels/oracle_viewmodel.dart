@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import '../data/datasources/local_datasource.dart';
 import '../data/models/crisis_event_model.dart';
 import '../data/models/daily_log_model.dart';
 import '../data/models/profile_model.dart';
 import '../data/models/recurring_rule_model.dart';
 import '../data/models/recurring_transaction_model.dart';
+import '../data/repositories/oracle_repository.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/datasources/supabase_datasource.dart';
@@ -62,8 +62,7 @@ class OracleViewModel extends ChangeNotifier {
   CrisisEventModel? _scheduledCrisisInjection;
 
   final GeminiService _gemini;
-  final SupabaseDataSource _dataSource;
-  final LocalDataSource _localDataSource;
+  final OracleRepository _oracleRepository;
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get isOracleTyping => _isOracleTyping;
@@ -73,10 +72,11 @@ class OracleViewModel extends ChangeNotifier {
   OracleViewModel({
     GeminiService? gemini,
     SupabaseDataSource? dataSource,
-    LocalDataSource? localDataSource,
+    OracleRepository? oracleRepository,
   }) : _gemini = gemini ?? GeminiService(),
-       _dataSource = dataSource ?? SupabaseDataSource(),
-       _localDataSource = localDataSource ?? LocalDataSource() {
+       _oracleRepository =
+           oracleRepository ??
+           OracleRepository(supabaseDataSource: dataSource) {
     _initialize();
   }
 
@@ -89,35 +89,20 @@ class OracleViewModel extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    await _loadContextAndSeed(isReset: false, markInitialized: true);
+  }
+
+  Future<void> _loadContextAndSeed({
+    required bool isReset,
+    required bool markInitialized,
+  }) async {
     try {
-      ProfileModel? profile;
-      List<RecurringTransactionModel> transactions = [];
-      List<DailyLogModel> logs = [];
-      List<RecurringRuleModel> rules = [];
-
-      // Önce Supabase'den çek, başarısız olursa yerel cache'e düş
-      try {
-        final userId = SupabaseService.instance.currentUserId;
-        if (userId != null) {
-          profile = await _dataSource.getUserProfile();
-          transactions = await _dataSource.getRecurringTransactions();
-          logs = await _dataSource.getRecentDailyLogs(days: 30);
-          rules = await _dataSource.getRecurringRules();
-        }
-      } catch (_) {
-        profile = null; // Supabase başarısız → local'e düş
-      }
-
-      // Supabase başarısız olduysa veya userId null ise local cache kullan
-      if (profile == null) {
-        profile = await _localDataSource.getProfile();
-        transactions = await _localDataSource.getRecurringTransactions();
-        logs = await _localDataSource.getRecentDailyLogs(days: 30);
-        rules = await _localDataSource.getRecurringRules();
-      }
-
-      final selectedGoal = await _localDataSource.getSelectedGoal();
-      final goalName = (selectedGoal['goalName'] ?? '').trim();
+      final snapshot = await _oracleRepository.loadContext();
+      final profile = snapshot.profile;
+      final transactions = snapshot.transactions;
+      final logs = snapshot.logs;
+      final rules = snapshot.rules;
+      final goalName = snapshot.goalName;
 
       if (profile != null) {
         _cachedProfile = profile;
@@ -142,13 +127,19 @@ class OracleViewModel extends ChangeNotifier {
             .fold(0.0, (s, t) => s + t.amount);
 
         _addOracleMessage(
-          'Merhaba **${profile.userName}**! Tüm finansal verilerini yükledim.\n'
-          '💰 Bakiye: **${profile.currentBalance.toStringAsFixed(0)} TL** | '
-          '🏦 Havuz: **${profile.savingsPool.toStringAsFixed(0)} TL** | '
-          '📊 Aylık net: **${(income - expense).toStringAsFixed(0)} TL**'
-          '${goalName.isNotEmpty ? ' | \ud83c\udfaf Hedef: **$goalName**' : ''}\n'
-          'Ne analiz edelim?',
-          actionButtons: [
+          isReset
+              ? 'Sohbet sıfırlandı. Güncel verilerini yeniden yükledim.\n'
+                    '💰 **${profile.currentBalance.toStringAsFixed(0)} TL** bakiye | '
+                    '🏦 **${profile.savingsPool.toStringAsFixed(0)} TL** havuz | '
+                    '📊 **${(income - expense).toStringAsFixed(0)} TL** aylık net'
+                    '${goalName.isNotEmpty ? ' | Hedef: **$goalName**' : ''}'
+              : 'Merhaba **${profile.userName}**! Tüm finansal verilerini yükledim.\n'
+                    '💰 Bakiye: **${profile.currentBalance.toStringAsFixed(0)} TL** | '
+                    '🏦 Havuz: **${profile.savingsPool.toStringAsFixed(0)} TL** | '
+                    '📊 Aylık net: **${(income - expense).toStringAsFixed(0)} TL**'
+                    '${goalName.isNotEmpty ? ' | Hedef: **$goalName**' : ''}\n'
+                    'Ne analiz edelim?',
+          actionButtons: const [
             'Harcama analizimi yap',
             'Hedefime ne zaman ulaşırım?',
             'Tasarruf önerisi ver',
@@ -160,13 +151,18 @@ class OracleViewModel extends ChangeNotifier {
         _seedFallbackMessages();
       }
     } catch (e) {
-      _initError = e.toString();
+      if (markInitialized) {
+        _initError = e.toString();
+      }
       _clearCachedContext();
-      if (_messages.isEmpty) _seedFallbackMessages();
+      if (_messages.isEmpty || isReset) {
+        _seedFallbackMessages();
+      }
     } finally {
-      _isInitialized = true;
-      // Eğer bekleyen bir kriz injeksiyonu varsa şimdi çalıştır
-      if (_scheduledCrisisInjection != null) {
+      if (markInitialized) {
+        _isInitialized = true;
+      }
+      if (markInitialized && _scheduledCrisisInjection != null) {
         final crisis = _scheduledCrisisInjection!;
         _scheduledCrisisInjection = null;
         if (_cachedProfile != null) {
@@ -212,84 +208,7 @@ class OracleViewModel extends ChangeNotifier {
   void clearChat() {
     _messages.clear();
     notifyListeners();
-    // Supabase'den taze veri çek ve Gemini'yi yeniden başlat
-    _reinitialize();
-  }
-
-  Future<void> _reinitialize() async {
-    try {
-      ProfileModel? profile;
-      List<RecurringTransactionModel> transactions = [];
-      List<DailyLogModel> logs = [];
-      List<RecurringRuleModel> rules = [];
-
-      try {
-        final userId = SupabaseService.instance.currentUserId;
-        if (userId != null) {
-          profile = await _dataSource.getUserProfile();
-          transactions = await _dataSource.getRecurringTransactions();
-          logs = await _dataSource.getRecentDailyLogs(days: 30);
-          rules = await _dataSource.getRecurringRules();
-        }
-      } catch (_) {
-        profile = null;
-      }
-
-      if (profile == null) {
-        profile = await _localDataSource.getProfile();
-        transactions = await _localDataSource.getRecurringTransactions();
-        logs = await _localDataSource.getRecentDailyLogs(days: 30);
-        rules = await _localDataSource.getRecurringRules();
-      }
-
-      final selectedGoal = await _localDataSource.getSelectedGoal();
-      final goalName = (selectedGoal['goalName'] ?? '').trim();
-
-      if (profile != null) {
-        _cachedProfile = profile;
-        _cachedTransactions = transactions;
-        _cachedLogs = logs;
-        _cachedRules = rules;
-        _cachedGoalName = goalName;
-
-        await _gemini.initializeContext(
-          profile: profile,
-          transactions: transactions,
-          recentLogs: logs,
-          rules: rules,
-          goalName: goalName,
-        );
-
-        final income = transactions
-            .where((t) => t.isIncome)
-            .fold(0.0, (s, t) => s + t.amount);
-        final expense = transactions
-            .where((t) => t.isExpense)
-            .fold(0.0, (s, t) => s + t.amount);
-
-        _addOracleMessage(
-          'Sohbet sıfırlandı. Güncel verilerini yeniden yükledim.\n'
-          '💰 **${profile.currentBalance.toStringAsFixed(0)} TL** bakiye | '
-          '🏦 **${profile.savingsPool.toStringAsFixed(0)} TL** havuz | '
-          '📊 **${(income - expense).toStringAsFixed(0)} TL** aylık net'
-          '${goalName.isNotEmpty ? ' | \ud83c\udfaf **$goalName**' : ''}',
-          actionButtons: [
-            'Harcama analizimi yap',
-            'Hedefime ne zaman ulaşırım?',
-            'Tasarruf önerisi ver',
-            'Düzenli giderlerimi incele',
-          ],
-        );
-      } else {
-        _clearCachedContext();
-        _seedFallbackMessages();
-      }
-    } catch (e) {
-      _clearCachedContext();
-      _seedFallbackMessages();
-    } finally {
-      notifyListeners();
-    }
+    unawaited(_loadContextAndSeed(isReset: true, markInitialized: false));
   }
 
   // ─── Kriz Enjeksiyonu ────────────────────────────────────────────────────────
@@ -592,9 +511,7 @@ class OracleViewModel extends ChangeNotifier {
         question: question,
       );
       _addOracleMessage(response);
-      _dataSource
-          .logDecision(actionTaken: 'Kahin: $action', xpGained: 0)
-          .catchError((_) {});
+      _oracleRepository.logDecision('Kahin: $action').catchError((_) {});
     } catch (e) {
       _addOracleMessage('Yanıt alınamadı: ${e.toString()}');
     } finally {
@@ -660,9 +577,7 @@ class OracleViewModel extends ChangeNotifier {
             'Finansal verilerine henüz ulaşamadım. Lütfen sohbeti yenile (sağ üst simge) veya internet bağlantını kontrol edip tekrar dene.';
       }
       _addOracleMessage(response);
-      _dataSource
-          .logDecision(actionTaken: 'Kahin: $text', xpGained: 0)
-          .catchError((_) {});
+      _oracleRepository.logDecision('Kahin: $text').catchError((_) {});
     } catch (e) {
       _addOracleMessage('Yanıt alınamadı: ${e.toString()}');
     } finally {

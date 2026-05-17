@@ -37,6 +37,8 @@ class SimulationScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     _TargetProjectionHeader(vm: vm),
                     const SizedBox(height: 20),
+                    _SavingsAverageCard(vm: vm),
+                    const SizedBox(height: 16),
                     _ProjectionChartCard(vm: vm),
                     const SizedBox(height: 16),
                     _AiInsightCard(vm: vm),
@@ -142,6 +144,123 @@ class _TargetProjectionHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SavingsAverageCard extends StatelessWidget {
+  final SimulationViewModel vm;
+  const _SavingsAverageCard({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final daily30 = vm.avgDailyTransferred30;
+    final daily7 = vm.avgDailyTransferred7;
+    final monthly = daily30 * 30;
+
+    String trendArrow = '→';
+    String trendText = 'Sabit';
+    if (daily7 > daily30 * 1.05) {
+      trendArrow = '↑';
+      trendText = 'Artis';
+    } else if (daily7 < daily30 * 0.95) {
+      trendArrow = '↓';
+      trendText = 'Azalis';
+    }
+    final trendDiff = daily30 > 0
+        ? (((daily7 - daily30) / daily30) * 100).abs()
+        : 0.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppDimensions.spaceL),
+      decoration: BoxDecoration(
+        color: AppColors.glass08,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+        border: Border.all(color: AppColors.glass12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            ' 30 GÜNLÜK TASARRUF ORTALAMASI',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceS),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricBox(
+                  label: 'Günlük ort. aktarım',
+                  value: '${daily30.toStringAsFixed(1)} ${vm.currencySymbol}',
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spaceM),
+              Expanded(
+                child: _MetricBox(
+                  label: 'Aylık tasarruf',
+                  value:
+                      '${monthly.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spaceS),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricBox(
+                  label: '7 GUN TREND',
+                  value:
+                      '$trendArrow $trendText (%${trendDiff.toStringAsFixed(1)})',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricBox extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _MetricBox({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppDimensions.spaceM),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+        border: Border.all(color: AppColors.glass12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceXS),
+          Text(
+            value,
+            style: AppTextStyles.titleMedium.copyWith(
+              color: AppColors.neonLime,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

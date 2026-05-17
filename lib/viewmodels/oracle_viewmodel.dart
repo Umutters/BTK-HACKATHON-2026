@@ -295,6 +295,8 @@ class OracleViewModel extends ChangeNotifier {
     final amountStr = crisis.amount.toStringAsFixed(0);
     final balanceStr = _cachedProfile?.currentBalance.toStringAsFixed(0) ?? '?';
     final poolStr = _cachedProfile?.savingsPool.toStringAsFixed(0) ?? '?';
+    final disciplineEvidence = _buildSevenDayDisciplineEvidence();
+    final disciplineCard = _buildSevenDayDisciplineCard();
 
     // Kullanıcı mesajı olarak kriz alarmını göster
     _messages.add(
@@ -314,10 +316,13 @@ class OracleViewModel extends ChangeNotifier {
         'Kullanıcının mevcut finansal durumu:\n'
         '- Anlık bakiye: $balanceStr TL\n'
         '- Birikim havuzu: $poolStr TL\n\n'
+        'Son 7 gün disiplin verisi (XAI kanıtı):\n'
+        '$disciplineEvidence\n\n'
         'Bu kriz için iki seçenek var:\n'
         '1. 🏦 Birikim havuzundan karşıla ($poolStr TL mevcut)\n'
         '2. 💰 Anlık bütçeden karşıla ($balanceStr TL mevcut)\n\n'
         'Lütfen şunları analiz et:\n'
+        '- İlk paragrafta mutlaka son 7 gün verilerini kullanarak kullanıcıya "yüzleşme" cümlesi kur\n'
         '- Bu krizin 2045 hedefine etkisi nedir?\n'
         '- Hangi stratejiyle karşılamalı ve neden?\n'
         '- Bu durumdan sonra toparlanmak için 1-2 somut öneri ver.\n'
@@ -335,16 +340,105 @@ class OracleViewModel extends ChangeNotifier {
       _addOracleMessage(
         response,
         actionButtons: ['🏦 Havuzdan Karşıla', '💰 Bütçeden Karşıla'],
+        dataCard: disciplineCard,
       );
     } catch (e) {
       _addOracleMessage(
         'Kriz analizi yapılamadı: ${e.toString()}. Kaynağını seçerek devam edebilirsin.',
         actionButtons: ['🏦 Havuzdan Karşıla', '💰 Bütçeden Karşıla'],
+        dataCard: disciplineCard,
       );
     } finally {
       _isOracleTyping = false;
       notifyListeners();
     }
+  }
+
+  String _buildSevenDayDisciplineEvidence() {
+    final profile = _cachedProfile;
+    if (profile == null || _cachedLogs.isEmpty || profile.dailyLimit <= 0) {
+      return '- Son 7 gün için yeterli log yok.';
+    }
+
+    final sorted = [..._cachedLogs]..sort((a, b) => b.date.compareTo(a.date));
+    final recent = sorted.take(7).toList();
+    if (recent.isEmpty) return '- Son 7 gün için yeterli log yok.';
+
+    final over = recent
+        .where((l) => l.spentAmount > profile.dailyLimit)
+        .toList();
+    final underOrEqual = recent.length - over.length;
+    final overRate = (over.length / recent.length) * 100;
+
+    final avgOverPct = over.isEmpty
+        ? 0.0
+        : over
+                  .map(
+                    (l) =>
+                        ((l.spentAmount - profile.dailyLimit) /
+                            profile.dailyLimit) *
+                        100,
+                  )
+                  .fold<double>(0, (sum, v) => sum + v) /
+              over.length;
+
+    var consecutiveOver = 0;
+    for (final log in recent) {
+      if (log.spentAmount > profile.dailyLimit) {
+        consecutiveOver += 1;
+      } else {
+        break;
+      }
+    }
+
+    return '- İncelenen gün: ${recent.length}\n'
+        '- Limit: ${profile.dailyLimit.toStringAsFixed(0)} TL/gün\n'
+        '- Limit aşımı: ${over.length}/${recent.length} gün (%${overRate.toStringAsFixed(0)})\n'
+        '- Limit altı/eşit: $underOrEqual gün\n'
+        '- Aşım günlerinde ortalama taşma: %${avgOverPct.toStringAsFixed(0)}\n'
+        '- Mevcut aşım serisi: $consecutiveOver gün';
+  }
+
+  DataCard? _buildSevenDayDisciplineCard() {
+    final profile = _cachedProfile;
+    if (profile == null || _cachedLogs.isEmpty || profile.dailyLimit <= 0) {
+      return null;
+    }
+
+    final sorted = [..._cachedLogs]..sort((a, b) => b.date.compareTo(a.date));
+    final recent = sorted.take(7).toList();
+    if (recent.isEmpty) return null;
+
+    final belowOrEqual = recent
+        .where((l) => l.spentAmount <= profile.dailyLimit)
+        .length;
+    final score = ((belowOrEqual / recent.length) * 100).clamp(0, 100);
+
+    final over = recent
+        .where((l) => l.spentAmount > profile.dailyLimit)
+        .toList();
+    final avgOverPct = over.isEmpty
+        ? 0.0
+        : over
+                  .map(
+                    (l) =>
+                        ((l.spentAmount - profile.dailyLimit) /
+                            profile.dailyLimit) *
+                        100,
+                  )
+                  .fold<double>(0, (sum, v) => sum + v) /
+              over.length;
+
+    final multiValue =
+        '%${score.toStringAsFixed(0)} | '
+        '${over.length}/7 aşım | '
+        '+%${avgOverPct.toStringAsFixed(0)}';
+
+    return DataCard(
+      label: 'SON 7 GUN DISIPLIN SKORU',
+      value: multiValue,
+      progress: score / 100,
+    );
   }
 
   Future<void> _resolvePendingCrisis(String strategy) async {
@@ -394,11 +488,11 @@ class OracleViewModel extends ChangeNotifier {
   /// Action butonları için: verileri doğrudan gemini-2.0-flash'a gönderir.
   Future<void> sendActionButton(String action) async {
     // Kriz çözüm butonlarını yakala
-    if (action == '🏦 Havuzdan Karşıla') {
+    if (action.contains('Havuzdan')) {
       await _resolvePendingCrisis('pool');
       return;
     }
-    if (action == '💰 Bütçeden Karşıla') {
+    if (action.contains('Bütçeden')) {
       await _resolvePendingCrisis('budget');
       return;
     }

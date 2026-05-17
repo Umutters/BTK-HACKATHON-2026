@@ -69,6 +69,24 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final userId = SupabaseService.instance.currentUserId;
+      if (userId != null) {
+        try {
+          await SupabaseService.instance.reconcileDailySavingsAndXp(
+            userId: userId,
+            lookbackDays: 30,
+          );
+        } catch (_) {
+          // Reconcile best-effort; ekran açılışını bloklamasın.
+        }
+      } else {
+        try {
+          await _localDataSource.reconcileDailySavingsAndXp(lookbackDays: 30);
+        } catch (_) {
+          // Local reconcile best-effort.
+        }
+      }
+
       final results = await Future.wait([
         _getUserProgressUseCase(),
         _getDailyQuestsUseCase(),
@@ -80,13 +98,14 @@ class HomeViewModel extends ChangeNotifier {
       _setTransactions(results[2] as List<RecurringTransactionModel>);
       _currencyCode = await _localDataSource.getPreferredCurrency();
 
-      final userId = SupabaseService.instance.currentUserId;
       final profile = userId == null
           ? null
           : await SupabaseService.instance.getProfile(userId);
       if (profile != null) {
         _currentBalance = profile.currentBalance;
-        _savingsPool = profile.savingsPool;
+        _savingsPool = await SupabaseService.instance.getSavingsTotal(
+          userId!,
+        );
       } else {
         _currentBalance = 0;
         _savingsPool = 0;

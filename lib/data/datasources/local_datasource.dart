@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +22,7 @@ class LocalDataSource {
   static const _goalIdKey = 'ldb_goal_id';
   static const _goalNameKey = 'ldb_goal_name';
   static const _currencyKey = 'ldb_currency';
+  static const _dailyReconcileProcessedKey = 'ldb_daily_reconcile_processed';
 
   /// main.dart'ta önceden başlatılır.
   static SharedPreferences? sharedPrefs;
@@ -275,6 +277,7 @@ class LocalDataSource {
   Future<void> logDailySpending({
     required double spentAmount,
     required double transferredToSavings,
+    double? dailyLimit,
   }) async {
     final prefs = await _prefs;
     final json = prefs.getString(_dailyLogsKey);
@@ -294,6 +297,9 @@ class LocalDataSource {
     final mergedTransferred =
         ((existing?['transferred_to_savings'] as num?)?.toDouble() ?? 0) +
         transferredToSavings;
+    final resolvedTransferred = dailyLimit == null
+        ? mergedTransferred
+        : max(0.0, dailyLimit - mergedSpent);
 
     list.removeWhere((e) => (e as Map<String, dynamic>)['date'] == today);
     list.add({
@@ -301,11 +307,127 @@ class LocalDataSource {
       'user_id': 'local',
       'date': today,
       'spent_amount': mergedSpent,
-      'transferred_to_savings': mergedTransferred,
+      'transferred_to_savings': resolvedTransferred,
     });
     // Son 30 günü tut
     if (list.length > 30) list.removeRange(0, list.length - 30);
     await prefs.setString(_dailyLogsKey, jsonEncode(list));
+  }
+
+  Future<void> reconcileDailySavingsAndXp({
+    int lookbackDays = 30,
+    int disciplineXp = 10,
+  }) async {
+    final profile = await getProfile();
+    if (profile == null || profile.dailyLimit <= 0) return;
+
+    final prefs = await _prefs;
+    final json = prefs.getString(_dailyLogsKey);
+    if (json == null) return;
+
+    final rawList = jsonDecode(json) as List<dynamic>;
+    if (rawList.isEmpty) return;
+
+    final processedRaw =
+        prefs.getStringList(_dailyReconcileProcessedKey) ?? const <String>[];
+    final processedDates = processedRaw.toSet();
+
+    final since = DateTime.now().subtract(Duration(days: lookbackDays));
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+
+    int xpDelta = 0;
+    bool logsChanged = false;
+
+    for (final entry in rawList) {
+      final row = entry as Map<String, dynamic>;
+      final dateKey = (row['date'] as String?) ?? '';
+      if (dateKey.isEmpty ||
+          dateKey == today ||
+          processedDates.contains(dateKey)) {
+        continue;
+      }
+
+      final date = DateTime.tryParse(dateKey);
+      if (date == null || date.isBefore(since)) {
+        continue;
+      }
+
+      final spent = (row['spent_amount'] as num?)?.toDouble() ?? 0.0;
+      final expectedTransfer = max(0.0, profile.dailyLimit - spent);
+      final currentTransfer =
+          (row['transferred_to_savings'] as num?)?.toDouble() ?? 0.0;
+
+      if ((currentTransfer - expectedTransfer).abs() > 0.01) {
+        row['transferred_to_savings'] = expectedTransfer;
+        logsChanged = true;
+      }
+
+      if (spent <= profile.dailyLimit) {
+        xpDelta += disciplineXp;
+      }
+
+      processedDates.add(dateKey);
+    }
+
+    if (processedDates.length != processedRaw.length) {
+      await prefs.setStringList(
+        _dailyReconcileProcessedKey,
+        processedDates.toList()..sort(),
+      );
+    }
+
+    if (logsChanged) {
+      await prefs.setString(_dailyLogsKey, jsonEncode(rawList));
+    }
+
+    if (xpDelta <= 0) {
+      return;
+    }
+
+    var nextLevel = profile.level;
+    var nextXp = profile.xp + xpDelta;
+    var nextMaxXp = max(1000, nextLevel * 1000);
+    while (nextXp >= nextMaxXp) {
+      nextXp -= nextMaxXp;
+      nextLevel += 1;
+      nextMaxXp = max(1000, nextLevel * 1000);
+    }
+
+    final updated = ProfileModel(
+      id: profile.id,
+      userName: profile.userName,
+      age: profile.age,
+      gender: profile.gender,
+      initialBalance: profile.initialBalance,
+      currentBalance: profile.currentBalance,
+      savingsPool: profile.savingsPool,
+      level: nextLevel,
+      xp: nextXp,
+      dailyLimit: profile.dailyLimit,
+    );
+    await saveProfile(updated);
+  }
+
+  /// İdeal birikim = initialBalance + SUM(daily_logs.transferred_to_savings)
+  Future<double> getSavingsTotal() async {
+    final profile = await getProfile();
+    if (profile == null) return 0.0;
+
+    final prefs = await _prefs;
+    final json = prefs.getString(_dailyLogsKey);
+    if (json == null) return profile.initialBalance;
+
+    try {
+      final rawList = jsonDecode(json) as List<dynamic>;
+      final transferred = rawList.fold<double>(
+        0,
+        (sum, row) =>
+            sum + ((row['transferred_to_savings'] as num?)?.toDouble() ?? 0),
+      );
+      return profile.initialBalance + transferred;
+    } catch (e) {
+      return profile.initialBalance;
+    }
   }
 
   // ─── Temizle (logout / reset) ─────────────────────────────────────────────
@@ -318,6 +440,7 @@ class LocalDataSource {
       prefs.remove(_rulesKey),
       prefs.remove(_dailyLogsKey),
       prefs.remove(_questStatusKey),
+      prefs.remove(_dailyReconcileProcessedKey),
       prefs.remove(_onboardingDoneKey),
       prefs.remove(_goalIdKey),
       prefs.remove(_goalNameKey),

@@ -184,10 +184,18 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
 
       final dataSource = LocalDataSource();
       await dataSource.addRecurringTransaction(txn);
-      await dataSource.logDailySpending(
-        spentAmount: _entryType == _EntryType.expense ? _amount : 0,
-        transferredToSavings: transferredToSavings,
-      );
+      if (_entryType == _EntryType.expense) {
+        await dataSource.logDailySpending(
+          spentAmount: _amount,
+          transferredToSavings: 0,
+          dailyLimit: profile?.dailyLimit,
+        );
+      } else if (_entryType == _EntryType.savings) {
+        await dataSource.logDailySpending(
+          spentAmount: 0,
+          transferredToSavings: transferredToSavings,
+        );
+      }
 
       // İşlemi profil bakiyesine yansıt.
       if (profile != null) {
@@ -215,11 +223,20 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
             'current_balance': newBalance,
             'savings_pool': updatedProfile.savingsPool,
           });
-          await SupabaseService.instance.insertDailyLog(
-            userId: authUserId,
-            spentAmount: _entryType == _EntryType.expense ? _amount : 0,
-            transferredToSavings: transferredToSavings,
-          );
+          if (_entryType == _EntryType.expense) {
+            await SupabaseService.instance.insertDailyLog(
+              userId: authUserId,
+              spentAmount: _amount,
+              transferredToSavings: 0,
+              dailyLimit: profile?.dailyLimit,
+            );
+          } else if (_entryType == _EntryType.savings) {
+            await SupabaseService.instance.insertDailyLog(
+              userId: authUserId,
+              spentAmount: 0,
+              transferredToSavings: transferredToSavings,
+            );
+          }
         }
       }
 

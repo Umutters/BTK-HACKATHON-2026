@@ -65,6 +65,8 @@ class SimulationViewModel extends ChangeNotifier {
 
   double _goalMillions = 0.0;
   double _monthlySurplus = 0.0;
+  double _avgDailyTransferred30 = 0.0;
+  double _avgDailyTransferred7 = 0.0;
   String _goalName = 'Finansal Hedef';
   String _goalId = '';
   String _currencyCode = 'TRY';
@@ -97,6 +99,8 @@ class SimulationViewModel extends ChangeNotifier {
   String get goalName => _goalName;
   String get currencySymbol => _currencyCode == 'USD' ? r'$' : 'TL';
   double get monthlySurplus => _monthlySurplus;
+  double get avgDailyTransferred30 => _avgDailyTransferred30;
+  double get avgDailyTransferred7 => _avgDailyTransferred7;
   List<TransactionImpact> get transactionImpacts => _transactionImpacts;
   List<ProjectionPoint> get currentPoints => _currentPoints;
   List<ProjectionPoint> get optimizedPoints => _optimizedPoints;
@@ -229,6 +233,19 @@ class SimulationViewModel extends ChangeNotifier {
       transactions: transactions,
       logs: logs,
     );
+    _avgDailyTransferred30 = logs.isEmpty
+        ? 0.0
+        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
+              logs.length;
+    _avgDailyTransferred7 = logs.isEmpty
+        ? 0.0
+        : logs.length >= 7
+        ? logs
+                  .take(7)
+                  .fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
+              7
+        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
+              logs.length;
 
     _currentPoints = _buildFvCurve(
       startYear: _startYear,
@@ -376,18 +393,15 @@ class SimulationViewModel extends ChangeNotifier {
         ? 0.0
         : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
               logs.length;
-
-    final dailySpendAvg = logs.isEmpty
-        ? (profile?.dailyLimit ?? 0) * 0.8
-        : logs.fold<double>(0, (sum, l) => sum + l.spentAmount) / logs.length;
-
     final monthlyTransfers = dailyTransferAvg * 30;
-    final monthlyVariableSpend = dailySpendAvg * 30;
 
-    return recurringIncome -
-        recurringExpense +
-        monthlyTransfers -
-        monthlyVariableSpend;
+    if (logs.isNotEmpty) {
+      // Simülasyonun yakıtı: son 30 gündeki gerçek günlük aktarım ortalaması.
+      return recurringIncome - recurringExpense + monthlyTransfers;
+    }
+
+    final fallbackDailySpend = (profile?.dailyLimit ?? 0) * 0.8;
+    return recurringIncome - recurringExpense - (fallbackDailySpend * 30);
   }
 
   List<ProjectionPoint> _buildFvCurve({

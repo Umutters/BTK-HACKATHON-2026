@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/crisis_event_model.dart';
@@ -117,10 +119,68 @@ class SupabaseService {
       updateProfile(userId, {'current_balance': balance});
 
   Future<void> addToSavingsPool(String userId, double amount) async {
-    final profile = await getProfile(userId);
-    if (profile == null) return;
-    final newPool = profile.savingsPool + amount;
-    await updateProfile(userId, {'savings_pool': newPool});
+    // ESKI MANTIK KALDIRILAN - Birikim artık calculated field:
+    // savingsPool = initialBalance + SUM(daily_logs.transferred_to_savings)
+    // Crisis işlemleri daily_logs'ta negatif transfer olarak kaydedilir
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+
+    try {
+      final existing = await _client
+          .from('daily_logs')
+          .select()
+          .eq('user_id', userId)
+          .eq('date', today)
+          .maybeSingle();
+
+      final currentTransferred =
+          ((existing?['transferred_to_savings'] as num?)?.toDouble() ?? 0);
+      final newTransferred = currentTransferred + amount;
+
+      if (existing == null) {
+        await _client.from('daily_logs').insert({
+          'user_id': userId,
+          'date': today,
+          'spent_amount': 0,
+          'transferred_to_savings': newTransferred,
+        });
+      } else {
+        await _client
+            .from('daily_logs')
+            .update({'transferred_to_savings': newTransferred})
+            .eq('user_id', userId)
+            .eq('date', today);
+      }
+    } on PostgrestException {
+      // Legacy user fallback
+      final legacyUserId = await _resolveLegacyUserId(userId);
+      if (legacyUserId != null) {
+        final existing = await _client
+            .from('daily_logs')
+            .select()
+            .eq('user_id', legacyUserId)
+            .eq('date', today)
+            .maybeSingle();
+
+        final currentTransferred =
+            ((existing?['transferred_to_savings'] as num?)?.toDouble() ?? 0);
+        final newTransferred = currentTransferred + amount;
+
+        if (existing == null) {
+          await _client.from('daily_logs').insert({
+            'user_id': legacyUserId,
+            'date': today,
+            'spent_amount': 0,
+            'transferred_to_savings': newTransferred,
+          });
+        } else {
+          await _client
+              .from('daily_logs')
+              .update({'transferred_to_savings': newTransferred})
+              .eq('user_id', legacyUserId)
+              .eq('date', today);
+        }
+      }
+    }
   }
 
   // ─── Recurring Transactions ───────────────────────────────────────────────
@@ -244,10 +304,58 @@ class SupabaseService {
     }
   }
 
+  /// İdeal birikim = initialBalance + SUM(daily_logs.transferred_to_savings)
+  Future<double> getSavingsTotal(String userId) async {
+    final profile = await getProfile(userId);
+    if (profile == null) return 0.0;
+
+    try {
+      final data = await _client
+          .from('daily_logs')
+          .select('transferred_to_savings')
+          .eq('user_id', userId);
+
+      final transferred =
+          (data as List?)?.fold<double>(
+            0,
+            (sum, row) =>
+                sum +
+                ((row['transferred_to_savings'] as num?)?.toDouble() ?? 0),
+          ) ??
+          0;
+
+      return profile.initialBalance + transferred;
+    } on PostgrestException {
+      final legacyUserId = await _resolveLegacyUserId(userId);
+      if (legacyUserId == null) return profile.initialBalance;
+
+      try {
+        final data = await _client
+            .from('daily_logs')
+            .select('transferred_to_savings')
+            .eq('user_id', legacyUserId);
+
+        final transferred =
+            (data as List?)?.fold<double>(
+              0,
+              (sum, row) =>
+                  sum +
+                  ((row['transferred_to_savings'] as num?)?.toDouble() ?? 0),
+            ) ??
+            0;
+
+        return profile.initialBalance + transferred;
+      } on PostgrestException {
+        return profile.initialBalance;
+      }
+    }
+  }
+
   Future<void> insertDailyLog({
     required String userId,
     required double spentAmount,
     required double transferredToSavings,
+    double? dailyLimit,
   }) async {
     final today = DateTime.now().toIso8601String().substring(0, 10);
 
@@ -264,20 +372,23 @@ class SupabaseService {
       final mergedTransferred =
           ((existing?['transferred_to_savings'] as num?)?.toDouble() ?? 0) +
           transferredToSavings;
+      final resolvedTransferred = dailyLimit == null
+          ? mergedTransferred
+          : max(0.0, dailyLimit - mergedSpent);
 
       if (existing == null) {
         await _client.from('daily_logs').insert({
           'user_id': userId,
           'date': today,
           'spent_amount': mergedSpent,
-          'transferred_to_savings': mergedTransferred,
+          'transferred_to_savings': resolvedTransferred,
         });
       } else {
         await _client
             .from('daily_logs')
             .update({
               'spent_amount': mergedSpent,
-              'transferred_to_savings': mergedTransferred,
+              'transferred_to_savings': resolvedTransferred,
             })
             .eq('user_id', userId)
             .eq('date', today);
@@ -304,24 +415,282 @@ class SupabaseService {
     final mergedTransferred =
         ((existing?['transferred_to_savings'] as num?)?.toDouble() ?? 0) +
         transferredToSavings;
+    final resolvedTransferred = dailyLimit == null
+        ? mergedTransferred
+        : max(0.0, dailyLimit - mergedSpent);
 
     if (existing == null) {
       await _client.from('daily_logs').insert({
         'user_id': legacyUserId,
         'date': today,
         'spent_amount': mergedSpent,
-        'transferred_to_savings': mergedTransferred,
+        'transferred_to_savings': resolvedTransferred,
       });
     } else {
       await _client
           .from('daily_logs')
           .update({
             'spent_amount': mergedSpent,
-            'transferred_to_savings': mergedTransferred,
+            'transferred_to_savings': resolvedTransferred,
           })
           .eq('user_id', legacyUserId)
           .eq('date', today);
     }
+  }
+
+  Future<void> setDailyTransferredForDate({
+    required String userId,
+    required String date,
+    required double transferredToSavings,
+  }) async {
+    try {
+      await _client
+          .from('daily_logs')
+          .update({'transferred_to_savings': transferredToSavings})
+          .eq('user_id', userId)
+          .eq('date', date);
+      return;
+    } on PostgrestException {
+      // Legacy şema için fallback aşağıda.
+    }
+
+    final legacyUserId = await _resolveLegacyUserId(userId);
+    if (legacyUserId == null) return;
+    await _client
+        .from('daily_logs')
+        .update({'transferred_to_savings': transferredToSavings})
+        .eq('user_id', legacyUserId)
+        .eq('date', date);
+  }
+
+  Future<void> reconcileDailySavingsAndXp({
+    required String userId,
+    int lookbackDays = 30,
+    int disciplineXp = 10,
+  }) async {
+    final reconciledWithColumns = await _reconcileDailyUsingLogColumns(
+      userId: userId,
+      lookbackDays: lookbackDays,
+      disciplineXp: disciplineXp,
+    );
+    if (reconciledWithColumns) {
+      return;
+    }
+
+    final profile = await getProfile(userId);
+    if (profile == null || profile.dailyLimit <= 0) return;
+
+    final logs = await getRecentDailyLogs(userId, days: lookbackDays);
+    if (logs.isEmpty) return;
+
+    final processedDates = await _getProcessedReconcileDates(userId);
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+
+    int xpDelta = 0;
+    final actions = <String>[];
+
+    for (final log in logs) {
+      final dateKey = log.date.toIso8601String().substring(0, 10);
+      if (dateKey == today || processedDates.contains(dateKey)) {
+        continue;
+      }
+
+      final expectedTransfer = max(0.0, profile.dailyLimit - log.spentAmount);
+      if ((log.transferredToSavings - expectedTransfer).abs() > 0.01) {
+        await setDailyTransferredForDate(
+          userId: userId,
+          date: dateKey,
+          transferredToSavings: expectedTransfer,
+        );
+      }
+
+      if (log.spentAmount <= profile.dailyLimit) {
+        xpDelta += disciplineXp;
+      }
+
+      actions.add(
+        'AUTO_DAILY_RECONCILE:$dateKey:spent=${log.spentAmount.toStringAsFixed(2)}:transfer=${expectedTransfer.toStringAsFixed(2)}:xp=${log.spentAmount <= profile.dailyLimit ? disciplineXp : 0}',
+      );
+    }
+
+    if (actions.isEmpty) return;
+
+    var nextLevel = profile.level;
+    var nextXp = profile.xp + xpDelta;
+    var nextMaxXp = max(1000, nextLevel * 1000);
+
+    while (nextXp >= nextMaxXp) {
+      nextXp -= nextMaxXp;
+      nextLevel += 1;
+      nextMaxXp = max(1000, nextLevel * 1000);
+    }
+
+    final updates = <String, dynamic>{};
+    if (xpDelta > 0 || nextLevel != profile.level) {
+      updates['xp'] = nextXp;
+      updates['level'] = nextLevel;
+    }
+
+    if (updates.isNotEmpty) {
+      await updateProfile(userId, updates);
+    }
+
+    for (final action in actions) {
+      await logDecision(userId: userId, actionTaken: action, xpGained: 0);
+    }
+  }
+
+  Future<bool> _reconcileDailyUsingLogColumns({
+    required String userId,
+    required int lookbackDays,
+    required int disciplineXp,
+  }) async {
+    final profile = await getProfile(userId);
+    if (profile == null || profile.dailyLimit <= 0) return true;
+
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final sinceDate = DateTime.now()
+        .subtract(Duration(days: lookbackDays))
+        .toIso8601String()
+        .substring(0, 10);
+
+    List<dynamic> rows;
+    bool useLegacyId = false;
+    try {
+      rows = await _client
+          .from('daily_logs')
+          .select(
+            'date, spent_amount, transferred_to_savings, reconciled_at, reconciled_transfer_amount, reconciled_xp_awarded',
+          )
+          .eq('user_id', userId)
+          .gte('date', sinceDate)
+          .order('date', ascending: false);
+    } on PostgrestException {
+      final legacyUserId = await _resolveLegacyUserId(userId);
+      if (legacyUserId == null) {
+        return false;
+      }
+      useLegacyId = true;
+      try {
+        rows = await _client
+            .from('daily_logs')
+            .select(
+              'date, spent_amount, transferred_to_savings, reconciled_at, reconciled_transfer_amount, reconciled_xp_awarded',
+            )
+            .eq('user_id', legacyUserId)
+            .gte('date', sinceDate)
+            .order('date', ascending: false);
+      } on PostgrestException {
+        // Reconcile kolonları henüz migration almamış olabilir.
+        return false;
+      }
+    }
+
+    int xpDelta = 0;
+    final actions = <String>[];
+
+    for (final row in rows) {
+      final map = row as Map<String, dynamic>;
+      final dateKey = (map['date'] as String?) ?? '';
+      if (dateKey.isEmpty || dateKey == today || map['reconciled_at'] != null) {
+        continue;
+      }
+
+      final spent = (map['spent_amount'] as num?)?.toDouble() ?? 0.0;
+      final currentTransfer =
+          (map['transferred_to_savings'] as num?)?.toDouble() ?? 0.0;
+      final expectedTransfer = max(0.0, profile.dailyLimit - spent);
+      final xpAwarded = spent <= profile.dailyLimit ? disciplineXp : 0;
+
+      xpDelta += xpAwarded;
+
+      final updatePayload = {
+        'transferred_to_savings': expectedTransfer,
+        'reconciled_at': DateTime.now().toIso8601String(),
+        'reconciled_transfer_amount': expectedTransfer,
+        'reconciled_xp_awarded': xpAwarded,
+      };
+
+      if (!useLegacyId) {
+        await _client
+            .from('daily_logs')
+            .update(updatePayload)
+            .eq('user_id', userId)
+            .eq('date', dateKey);
+      } else {
+        final legacyUserId = await _resolveLegacyUserId(userId);
+        if (legacyUserId != null) {
+          await _client
+              .from('daily_logs')
+              .update(updatePayload)
+              .eq('user_id', legacyUserId)
+              .eq('date', dateKey);
+        }
+      }
+
+      if ((currentTransfer - expectedTransfer).abs() > 0.01 || xpAwarded > 0) {
+        actions.add(
+          'AUTO_DAILY_RECONCILE_DB:$dateKey:spent=${spent.toStringAsFixed(2)}:transfer=${expectedTransfer.toStringAsFixed(2)}:xp=$xpAwarded',
+        );
+      }
+    }
+
+    if (xpDelta <= 0) {
+      return true;
+    }
+
+    var nextLevel = profile.level;
+    var nextXp = profile.xp + xpDelta;
+    var nextMaxXp = max(1000, nextLevel * 1000);
+
+    while (nextXp >= nextMaxXp) {
+      nextXp -= nextMaxXp;
+      nextLevel += 1;
+      nextMaxXp = max(1000, nextLevel * 1000);
+    }
+
+    final updates = <String, dynamic>{'xp': nextXp, 'level': nextLevel};
+    await updateProfile(userId, updates);
+
+    for (final action in actions) {
+      await logDecision(userId: userId, actionTaken: action, xpGained: 0);
+    }
+
+    return true;
+  }
+
+  Future<Set<String>> _getProcessedReconcileDates(String userId) async {
+    List<dynamic> rows;
+    try {
+      rows = await _client
+          .from('decisions_log')
+          .select('action_taken')
+          .eq('user_id', userId)
+          .ilike('action_taken', 'AUTO_DAILY_RECONCILE:%')
+          .limit(500);
+    } on PostgrestException {
+      final legacyUserId = await _resolveLegacyUserId(userId);
+      if (legacyUserId == null) return <String>{};
+      rows = await _client
+          .from('decisions_log')
+          .select('action_taken')
+          .eq('user_id', legacyUserId)
+          .ilike('action_taken', 'AUTO_DAILY_RECONCILE:%')
+          .limit(500);
+    }
+
+    final dates = <String>{};
+    for (final row in rows) {
+      final action = (row as Map<String, dynamic>)['action_taken'] as String?;
+      if (action == null || !action.startsWith('AUTO_DAILY_RECONCILE:')) {
+        continue;
+      }
+      final parts = action.split(':');
+      if (parts.length >= 2) {
+        dates.add(parts[1]);
+      }
+    }
+    return dates;
   }
 
   Future<int?> _resolveLegacyUserId(String authUserId) async {

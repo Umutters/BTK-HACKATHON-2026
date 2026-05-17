@@ -31,6 +31,7 @@ class HomeViewModel extends ChangeNotifier {
   List<QuestEntity> _quests = [];
   List<CrisisEventModel> _crisisEvents = [];
   String? _errorMessage;
+  String _currencyCode = 'TRY';
 
   HomeViewState get state => _state;
   UserEntity? get user => _user;
@@ -43,6 +44,8 @@ class HomeViewModel extends ChangeNotifier {
   List<QuestEntity> get quests => _quests;
   List<CrisisEventModel> get crisisEvents => List.unmodifiable(_crisisEvents);
   String? get errorMessage => _errorMessage;
+  String get currencyCode => _currencyCode;
+  String get currencySymbol => _currencyCode == 'USD' ? r'$' : 'TL';
 
   int get completedQuestsCount =>
       _quests.where((q) => q.status == QuestStatus.completed).length;
@@ -57,11 +60,12 @@ class HomeViewModel extends ChangeNotifier {
        _startQuestUseCase = startQuestUseCase,
        _completeQuestUseCase = completeQuestUseCase;
 
-  Future<void> initialize() async {
-    if (_state == HomeViewState.loading || _state == HomeViewState.loaded)
-      return;
+  Future<void> initialize({bool force = false}) async {
+    if (_state == HomeViewState.loading) return;
+    if (!force && _state == HomeViewState.loaded) return;
 
     _state = HomeViewState.loading;
+    _errorMessage = null;
     notifyListeners();
 
     try {
@@ -74,6 +78,7 @@ class HomeViewModel extends ChangeNotifier {
       _user = results[0] as UserEntity;
       _quests = results[1] as List<QuestEntity>;
       _setTransactions(results[2] as List<RecurringTransactionModel>);
+      _currencyCode = await _localDataSource.getPreferredCurrency();
 
       final userId = SupabaseService.instance.currentUserId;
       final profile = userId == null
@@ -118,6 +123,8 @@ class HomeViewModel extends ChangeNotifier {
 
     notifyListeners();
   }
+
+  Future<void> refresh() => initialize(force: true);
 
   Future<void> startQuest(String questId) async {
     try {

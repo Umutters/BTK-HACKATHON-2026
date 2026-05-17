@@ -67,6 +67,7 @@ class SimulationViewModel extends ChangeNotifier {
   double _monthlySurplus = 0.0;
   String _goalName = 'Finansal Hedef';
   String _goalId = '';
+  String _currencyCode = 'TRY';
   String? _aiInsightOverride;
 
   ProfileModel? _profile;
@@ -94,6 +95,7 @@ class SimulationViewModel extends ChangeNotifier {
   int get endYear => _endYear;
   double get goalMillions => _goalMillions;
   String get goalName => _goalName;
+  String get currencySymbol => _currencyCode == 'USD' ? r'$' : 'TL';
   double get monthlySurplus => _monthlySurplus;
   List<TransactionImpact> get transactionImpacts => _transactionImpacts;
   List<ProjectionPoint> get currentPoints => _currentPoints;
@@ -120,9 +122,9 @@ class SimulationViewModel extends ChangeNotifier {
 
   String get formattedTarget {
     final m = targetAmountMillions;
-    if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)}B TL';
-    if (m >= 1) return '${m.toStringAsFixed(1)}M TL';
-    return '${(m * 1000).toStringAsFixed(0)}K TL';
+    if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)}B $currencySymbol';
+    if (m >= 1) return '${m.toStringAsFixed(1)}M $currencySymbol';
+    return '${(m * 1000).toStringAsFixed(0)}K $currencySymbol';
   }
 
   int get aiGoalYear {
@@ -163,7 +165,7 @@ class SimulationViewModel extends ChangeNotifier {
         .take(3)
         .map(
           (e) =>
-              '${e.category} (${e.type}): ${_formatCompactTl(e.monthlyImpact)}/ay, ${e.sharePercent.toStringAsFixed(0)}%',
+              '${e.category} (${e.type}): ${_formatCompactMoney(e.monthlyImpact)}/ay, ${e.sharePercent.toStringAsFixed(0)}%',
         )
         .toList();
 
@@ -193,6 +195,7 @@ class SimulationViewModel extends ChangeNotifier {
     _profile = await _localDataSource.getProfile();
     _transactions = await _localDataSource.getRecurringTransactions();
     _logs = await _localDataSource.getRecentDailyLogs(days: 30);
+    _currencyCode = await _localDataSource.getPreferredCurrency();
     final selectedGoal = await _localDataSource.getSelectedGoal();
     _goalId = (selectedGoal['goalId'] ?? '').trim();
     _goalName = (selectedGoal['goalName'] ?? '').trim();
@@ -433,15 +436,15 @@ class SimulationViewModel extends ChangeNotifier {
     }
   }
 
-  String _formatCompactTl(double amount) {
+  String _formatCompactMoney(double amount) {
     final sign = amount >= 0 ? '+' : '-';
     final absAmount = amount.abs();
     if (absAmount >= 1000000) {
-      return '$sign${(absAmount / 1000000).toStringAsFixed(1)}M TL';
+      return '$sign${(absAmount / 1000000).toStringAsFixed(1)}M $currencySymbol';
     }
     if (absAmount >= 1000) {
-      return '$sign${(absAmount / 1000).toStringAsFixed(1)}K TL';
+      return '$sign${(absAmount / 1000).toStringAsFixed(1)}K $currencySymbol';
     }
-    return '$sign${absAmount.toStringAsFixed(0)} TL';
+    return '$sign${absAmount.toStringAsFixed(0)} $currencySymbol';
   }
 }

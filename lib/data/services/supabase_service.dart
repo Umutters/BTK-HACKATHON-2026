@@ -452,8 +452,27 @@ class SupabaseService {
 
   // ─── Auth Helpers ─────────────────────────────────────────────────────────
 
-  User? get currentUser => _client.auth.currentUser;
-  String? get currentUserId => _client.auth.currentUser?.id;
+  User? get currentUser {
+    try {
+      return _client.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
 
-  Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
+  String? get currentUserId {
+    try {
+      return _client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Stream<AuthState> get authStateChanges {
+    try {
+      return _client.auth.onAuthStateChange;
+    } catch (_) {
+      return const Stream<AuthState>.empty();
+    }
+  }
 }

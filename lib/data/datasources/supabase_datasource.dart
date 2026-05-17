@@ -1,3 +1,4 @@
+import '../../core/constants/app_env.dart';
 import '../models/profile_model.dart';
 import '../models/quest_model.dart';
 import '../models/recurring_transaction_model.dart';
@@ -15,11 +16,29 @@ class SupabaseDataSource {
   SupabaseDataSource({SupabaseService? supabase})
     : _supabase = supabase ?? SupabaseService.instance;
 
+  Future<String?> _resolveUserId() async {
+    var userId = _supabase.currentUserId;
+    if (userId != null) return userId;
+
+    if (AppEnv.supabaseUrl.isNotEmpty && AppEnv.supabaseAnonKey.isNotEmpty) {
+      try {
+        await _supabase.ensureSignedIn();
+      } catch (_) {
+        return null;
+      }
+      userId = _supabase.currentUserId;
+    }
+
+    return userId;
+  }
+
   // ─── Profile ─────────────────────────────────────────────────────────────
 
   Future<ProfileModel> getUserProfile() async {
-    final userId = _supabase.currentUserId;
-    if (userId == null) throw Exception('Kullanıcı oturum açmamış.');
+    final userId = await _resolveUserId();
+    if (userId == null) {
+      throw Exception('Supabase kullanicisi bulunamadi.');
+    }
     final profile = await _supabase.getProfile(userId);
     if (profile == null) throw Exception('Profil bulunamadı: $userId');
     return profile;
@@ -31,15 +50,15 @@ class SupabaseDataSource {
   // ─── Transactions ─────────────────────────────────────────────────────────
 
   Future<List<RecurringTransactionModel>> getRecurringTransactions() async {
-    final userId = _supabase.currentUserId;
-    if (userId == null) throw Exception('Kullanıcı oturum açmamış.');
+    final userId = await _resolveUserId();
+    if (userId == null) return const [];
     return _supabase.getRecurringTransactions(userId);
   }
 
   // ─── Recurring Rules ──────────────────────────────────────────────────────
 
   Future<List<RecurringRuleModel>> getRecurringRules() async {
-    final userId = _supabase.currentUserId;
+    final userId = await _resolveUserId();
     if (userId == null) return const [];
     return _supabase.getRecurringRules(userId);
   }
@@ -47,8 +66,8 @@ class SupabaseDataSource {
   // ─── Daily Logs ───────────────────────────────────────────────────────────
 
   Future<List<DailyLogModel>> getRecentDailyLogs({int days = 7}) async {
-    final userId = _supabase.currentUserId;
-    if (userId == null) throw Exception('Kullanıcı oturum açmamış.');
+    final userId = await _resolveUserId();
+    if (userId == null) return const [];
     return _supabase.getRecentDailyLogs(userId, days: days);
   }
 
@@ -56,7 +75,7 @@ class SupabaseDataSource {
     required double spentAmount,
     required double transferredToSavings,
   }) async {
-    final userId = _supabase.currentUserId;
+    final userId = await _resolveUserId();
     if (userId == null) return;
     await _supabase.insertDailyLog(
       userId: userId,
@@ -68,8 +87,8 @@ class SupabaseDataSource {
   // ─── Crisis Events ────────────────────────────────────────────────────────
 
   Future<List<CrisisEventModel>> getCrisisEvents() async {
-    final userId = _supabase.currentUserId;
-    if (userId == null) throw Exception('Kullanıcı oturum açmamış.');
+    final userId = await _resolveUserId();
+    if (userId == null) return const [];
     return _supabase.getCrisisEvents(userId);
   }
 
@@ -82,7 +101,7 @@ class SupabaseDataSource {
     required String actionTaken,
     int xpGained = 0,
   }) async {
-    final userId = _supabase.currentUserId;
+    final userId = await _resolveUserId();
     if (userId == null) return;
     await _supabase.logDecision(
       userId: userId,
@@ -92,8 +111,8 @@ class SupabaseDataSource {
   }
 
   Future<List<DecisionLogModel>> getDecisionLog() async {
-    final userId = _supabase.currentUserId;
-    if (userId == null) throw Exception('Kullanıcı oturum açmamış.');
+    final userId = await _resolveUserId();
+    if (userId == null) return const [];
     return _supabase.getDecisionLog(userId);
   }
 

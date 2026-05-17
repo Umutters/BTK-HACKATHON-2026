@@ -24,6 +24,7 @@ migrate_working_dir/
 #.vscode/
 # launch.json contains API keys via --dart-define, never commit to git
 .vscode/launch.json
+env.local.json
 
 # Flutter/Dart/Pub related
 **/doc/api/

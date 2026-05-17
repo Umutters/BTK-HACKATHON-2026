@@ -34,7 +34,7 @@ class _GoalData {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-/// Step 04/05 — Financial goal selection.
+/// Step 04/04 — Financial goal selection.
 class GoalSetupScreen extends StatefulWidget {
   const GoalSetupScreen({super.key});
 
@@ -140,8 +140,8 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── App header ───────────────────────────────────────────────────
-            _AppHeader(),
+            // ── Top header ───────────────────────────────────────────────────
+            _TopHeader(onBack: _goBack),
             Container(height: 1, color: AppColors.glass08),
 
             // ── Scrollable body ──────────────────────────────────────────────
@@ -153,17 +153,6 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
                 ),
                 child: Column(
                   children: [
-                    // Step label
-                    Text(
-                      'ADIM 04 / 05',
-                      style: AppTextStyles.labelCaps.copyWith(
-                        color: AppColors.cyberBlue,
-                        letterSpacing: 2,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spaceS),
-
                     // Title
                     Text(
                       'Finansal Hedefiniz',
@@ -177,7 +166,7 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
 
                     // Subtitle
                     Text(
-                      "Yapay zekanın size hangi yönde rehberlik etmesini istersiniz?\nStratejinizi belirleyin, komutları biz hazırlayalım.",
+                      'Yapay zekanin rehberlik edecegi ana hedefi secin.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.onSurfaceVariant,
                         height: 1.5,
@@ -208,12 +197,7 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
             ),
 
             // ── Bottom bar ───────────────────────────────────────────────────
-            _BottomBar(
-              progress: 4 / 5,
-              canProceed: _canProceed,
-              onBack: _goBack,
-              onProceed: _proceed,
-            ),
+            _BottomBar(canProceed: _canProceed, onProceed: _proceed),
           ],
         ),
       ),
@@ -223,8 +207,10 @@ class _GoalSetupScreenState extends State<GoalSetupScreen> {
 
 // ─── App header ───────────────────────────────────────────────────────────────
 
-class _AppHeader extends StatelessWidget {
-  const _AppHeader();
+class _TopHeader extends StatelessWidget {
+  final VoidCallback onBack;
+
+  const _TopHeader({required this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -235,37 +221,51 @@ class _AppHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Hamburger icon
-          const Icon(
-            Icons.menu_rounded,
-            color: AppColors.onSurface,
-            size: AppDimensions.iconM,
-          ),
-          const Spacer(),
-          // Brand
-          Text(
-            'KOMUT KONSOLU',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: AppColors.neonLime,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
+          GestureDetector(
+            onTap: onBack,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.glass08,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                border: Border.all(color: AppColors.glass12),
+              ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: AppColors.onSurface,
+                size: 20,
+              ),
             ),
           ),
           const Spacer(),
-          // Avatar
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.glass10,
-              border: Border.all(color: AppColors.neonLime30, width: 1.5),
-            ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: AppColors.onSurfaceVariant,
-              size: 22,
-            ),
+          Row(
+            children: [
+              Text(
+                'ADIM 04/04',
+                style: AppTextStyles.labelCaps.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spaceM),
+              SizedBox(
+                width: 48,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                  child: const SizedBox(
+                    height: 3,
+                    child: LinearProgressIndicator(
+                      value: 1,
+                      backgroundColor: AppColors.glass08,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.neonLime,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -301,121 +301,47 @@ class _GoalCard extends StatelessWidget {
             width: isSelected ? 1.5 : 1,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            // ── Top row: icon + optional recommended badge ───────────────────
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon box
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: goal.iconBg,
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                  ),
-                  child: Icon(goal.icon, color: goal.iconColor, size: 28),
-                ),
-                const Spacer(),
-                if (goal.isRecommended)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spaceM,
-                      vertical: AppDimensions.spaceXS,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.neonLime20,
-                      borderRadius: BorderRadius.circular(
-                        AppDimensions.radiusFull,
-                      ),
-                      border: Border.all(color: AppColors.neonLime, width: 1),
-                    ),
-                    child: Text(
-                      'ÖNERİLEN',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.neonLime,
-                        fontSize: 10,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppDimensions.spaceL),
-
-            // ── Name ─────────────────────────────────────────────────────────
-            Text(
-              goal.name,
-              style: AppTextStyles.titleLarge.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 20,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spaceXS),
-
-            // ── Cyber name badge ─────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimensions.spaceS,
-                vertical: 3,
-              ),
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: AppColors.glass10,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusXS),
+                color: goal.iconBg,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
               ),
-              child: Text(
-                goal.cyberName,
-                style: const TextStyle(
-                  fontFamily: 'SpaceGrotesk',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.onSurfaceVariant,
-                  letterSpacing: 0.5,
-                ),
-              ),
+              child: Icon(goal.icon, color: goal.iconColor, size: 26),
             ),
-            const SizedBox(height: AppDimensions.spaceM),
-
-            // ── Description ──────────────────────────────────────────────────
-            Text(
-              goal.description,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spaceL),
-
-            // Divider
-            Container(height: 1, color: AppColors.glass08),
-            const SizedBox(height: AppDimensions.spaceM),
-
-            // ── Action row ───────────────────────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  isSelected ? 'AKTİF' : 'SEÇ',
-                  style: AppTextStyles.labelCaps.copyWith(
-                    color: isSelected
-                        ? AppColors.neonLime
-                        : AppColors.onSurface,
-                    letterSpacing: 1.5,
-                    fontSize: 12,
+            const SizedBox(width: AppDimensions.spaceM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    goal.name,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 19,
+                    ),
                   ),
-                ),
-                Icon(
-                  isSelected
-                      ? Icons.check_circle_rounded
-                      : Icons.chevron_right_rounded,
-                  color: isSelected
-                      ? AppColors.neonLime
-                      : AppColors.onSurfaceVariant,
-                  size: AppDimensions.iconM,
-                ),
-              ],
+                  const SizedBox(height: AppDimensions.spaceXS),
+                  Text(
+                    goal.description,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppDimensions.spaceM),
+            Icon(
+              isSelected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: isSelected ? AppColors.neonLime : AppColors.outline,
+              size: 22,
             ),
           ],
         ),
@@ -427,21 +353,15 @@ class _GoalCard extends StatelessWidget {
 // ─── Bottom bar ───────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
-  final double progress;
   final bool canProceed;
-  final VoidCallback onBack;
   final VoidCallback onProceed;
 
-  const _BottomBar({
-    required this.progress,
-    required this.canProceed,
-    required this.onBack,
-    required this.onProceed,
-  });
+  const _BottomBar({required this.canProceed, required this.onProceed});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: context.width,
       padding: const EdgeInsets.fromLTRB(
         AppDimensions.pagePaddingH,
         AppDimensions.spaceL,
@@ -452,115 +372,37 @@ class _BottomBar extends StatelessWidget {
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.glass08)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Progress label row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'İLERLEME',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  letterSpacing: 1.5,
-                  fontSize: 10,
-                ),
-              ),
-              Text(
-                '${(progress * 100).round()}%',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.neonLime,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                ),
-              ),
-            ],
+      child: Expanded(
+        flex: 2,
+        child: ElevatedButton(
+          onPressed: canProceed ? onProceed : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: canProceed
+                ? AppColors.neonLime
+                : AppColors.glass08,
+            foregroundColor: AppColors.background,
+            disabledBackgroundColor: AppColors.glass08,
+            disabledForegroundColor: AppColors.onSurfaceVariant,
+            padding: const EdgeInsets.symmetric(vertical: AppDimensions.spaceL),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            ),
+            elevation: 0,
           ),
-          const SizedBox(height: AppDimensions.spaceXS),
-
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-            child: SizedBox(
-              height: 4,
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: AppColors.glass08,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppColors.neonLime,
-                ),
-              ),
+          child: Text(
+            'Devam Et',
+            style: AppTextStyles.labelLarge.copyWith(
+              color: canProceed
+                  ? AppColors.background
+                  : AppColors.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: AppDimensions.spaceL),
-
-          // Buttons row
-          Row(
-            children: [
-              // Geri
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onBack,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.onSurface,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppDimensions.spaceL,
-                    ),
-                    side: const BorderSide(color: AppColors.glass15, width: 1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppDimensions.radiusM,
-                      ),
-                    ),
-                    backgroundColor: AppColors.glass05,
-                  ),
-                  child: Text(
-                    'Geri',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: AppColors.onSurface,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spaceM),
-
-              // Devam Et
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: canProceed ? onProceed : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: canProceed
-                        ? AppColors.neonLime
-                        : AppColors.glass08,
-                    foregroundColor: AppColors.background,
-                    disabledBackgroundColor: AppColors.glass08,
-                    disabledForegroundColor: AppColors.onSurfaceVariant,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppDimensions.spaceL,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppDimensions.radiusM,
-                      ),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Devam Et',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: canProceed
-                          ? AppColors.background
-                          : AppColors.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+extension ContextExtension on BuildContext {
+  double get width => MediaQuery.of(this).size.width;
 }

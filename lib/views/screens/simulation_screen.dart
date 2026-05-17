@@ -19,28 +19,36 @@ class SimulationScreen extends StatelessWidget {
           backgroundColor: AppColors.background,
           appBar: _SimAppBar(),
           body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimensions.pagePaddingH,
-                vertical: AppDimensions.pagePaddingV,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 8),
-                  _TargetProjectionHeader(vm: vm),
-                  const SizedBox(height: 20),
-                  _ProjectionChartCard(vm: vm),
-                  const SizedBox(height: 16),
-                  _AiInsightCard(vm: vm),
-                  const SizedBox(height: 16),
-                  _TransactionBreakdownCard(vm: vm),
-                  const SizedBox(height: 16),
-                  _ProjectionTableCard(vm: vm),
-                  const SizedBox(height: 28),
-                  _WhatIfSlidersPanel(vm: vm),
-                  const SizedBox(height: 24),
-                ],
+            child: RefreshIndicator.adaptive(
+              color: AppColors.cyberBlue,
+              backgroundColor: AppColors.surface,
+              onRefresh: () => context.read<SimulationViewModel>().refresh(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.pagePaddingH,
+                  vertical: AppDimensions.pagePaddingV,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 8),
+                    _TargetProjectionHeader(vm: vm),
+                    const SizedBox(height: 20),
+                    _ProjectionChartCard(vm: vm),
+                    const SizedBox(height: 16),
+                    _AiInsightCard(vm: vm),
+                    const SizedBox(height: 16),
+                    _TransactionBreakdownCard(vm: vm),
+                    const SizedBox(height: 16),
+                    _ProjectionTableCard(vm: vm),
+                    const SizedBox(height: 28),
+                    _WhatIfSlidersPanel(vm: vm),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ),
@@ -644,7 +652,9 @@ class _ShimmerLineState extends State<_ShimmerLine>
         height: 12,
         width: widget.width,
         decoration: BoxDecoration(
-          color: AppColors.cyberBlue.withOpacity(_anim.value),
+          color: AppColors.cyberBlue.withValues(
+            alpha: (_anim.value * 255).toDouble(),
+          ),
           borderRadius: BorderRadius.circular(6),
         ),
       ),

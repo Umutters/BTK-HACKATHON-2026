@@ -43,7 +43,7 @@ class _UserSetupScreenState extends State<UserSetupScreen> {
     if (!_canProceed) return;
     _focusNode.unfocus();
     context.read<UserSetupViewModel>().setUserName(_nameController.text);
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, animation, _) => const AgeSetupScreen(),
         transitionsBuilder: (_, animation, _, child) =>
@@ -51,6 +51,10 @@ class _UserSetupScreenState extends State<UserSetupScreen> {
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
+  }
+
+  void _goBack() {
+    Navigator.of(context).pop();
   }
 
   @override
@@ -63,6 +67,8 @@ class _UserSetupScreenState extends State<UserSetupScreen> {
         body: SafeArea(
           child: Column(
             children: [
+              _TopStepHeader(currentStep: 1, totalSteps: 4, onBack: _goBack),
+              Container(height: 1, color: AppColors.glass08),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
@@ -74,7 +80,6 @@ class _UserSetupScreenState extends State<UserSetupScreen> {
                       const SizedBox(height: AppDimensions.spaceL),
                       const _OracleAvatar(),
                       const SizedBox(height: AppDimensions.spaceL),
-                      const _SystemOnlineBadge(),
                       const SizedBox(height: AppDimensions.space3XL),
                       _IdentityCard(
                         controller: _nameController,
@@ -118,35 +123,83 @@ class _OracleAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(
-        Icons.psychology_rounded,
-        size: 80,
-        color: AppColors.cyberBlue,
+      child: ClipOval(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimensions.spaceM),
+          child: Image.asset('assets/images/app_logo.png', fit: BoxFit.cover),
+        ),
       ),
     );
   }
 }
 
-// ─── "KÂHİN SİSTEMİ ÇEVRİMİÇİ" rozeti ───────────────────────────────────────
+class _TopStepHeader extends StatelessWidget {
+  final int currentStep;
+  final int totalSteps;
+  final VoidCallback onBack;
 
-class _SystemOnlineBadge extends StatelessWidget {
-  const _SystemOnlineBadge();
+  const _TopStepHeader({
+    required this.currentStep,
+    required this.totalSteps,
+    required this.onBack,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimensions.spaceXL,
-        vertical: AppDimensions.spaceS,
+        horizontal: AppDimensions.pagePaddingH,
+        vertical: AppDimensions.spaceL,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.glass08,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-        border: Border.all(color: AppColors.glass12),
-      ),
-      child: const Text(
-        'KÂHİN SİSTEMİ ÇEVRİMİÇİ',
-        style: AppTextStyles.labelCaps,
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onBack,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.glass08,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                border: Border.all(color: AppColors.glass12),
+              ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                size: 20,
+                color: AppColors.onSurface,
+              ),
+            ),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Text(
+                'ADIM ${currentStep.toString().padLeft(2, '0')}/${totalSteps.toString().padLeft(2, '0')}',
+                style: AppTextStyles.labelCaps.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spaceM),
+              SizedBox(
+                width: 80,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                  child: SizedBox(
+                    height: 3,
+                    child: LinearProgressIndicator(
+                      value: currentStep / totalSteps,
+                      backgroundColor: AppColors.glass08,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.neonLime,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -187,7 +240,7 @@ class _IdentityCard extends StatelessWidget {
           // Title
           const Center(
             child: Text(
-              'Kimliğinizi\nTanımlayın',
+              'Size nasıl\nhitap edelim?',
               style: AppTextStyles.displayLarge,
               textAlign: TextAlign.center,
             ),
@@ -251,7 +304,7 @@ class _IdentityCard extends StatelessWidget {
                   ),
                   color: AppColors.background,
                   child: Text(
-                    'OPERATÖR ADI',
+                    'KULLANICI ADI',
                     style: AppTextStyles.labelCaps.copyWith(
                       color: AppColors.cyberBlue,
                       fontSize: 10,
@@ -263,36 +316,6 @@ class _IdentityCard extends StatelessWidget {
           ),
 
           const SizedBox(height: AppDimensions.spaceXL),
-
-          // ── Encryption status ──
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.neonLime,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.neonLime30,
-                      blurRadius: 6,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spaceS),
-              Text(
-                'VERİ ŞİFRELEME AKTİF',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppDimensions.spaceXXL),
 
           // ── CTA button ──
           FfButton(
@@ -324,7 +347,7 @@ class _ProtocolTicker extends StatelessWidget {
         border: Border(top: BorderSide(color: AppColors.glass08)),
       ),
       child: Text(
-        'PROTOCOL: FX_COMMAND // NODE: 0X8A2C // STATUS: AUTHENTICATING',
+        'PROTOKOL: FX_COMMAND // KÖK: 0X8A2C // DURUM: YETKİLENDİRME BEKLENİYOR',
         style: AppTextStyles.labelMedium.copyWith(
           color: AppColors.outlineVariant,
           fontSize: 9,

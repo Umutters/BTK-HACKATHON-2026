@@ -31,7 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _finish() {
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, animation, _) => const UserSetupScreen(),
         transitionsBuilder: (_, animation, _, child) =>

@@ -140,10 +140,11 @@ class _OracleAppBar extends StatelessWidget implements PreferredSizeWidget {
             color: AppColors.cyberBlue10,
             border: Border.all(color: AppColors.cyberBlue15),
           ),
-          child: const Icon(
-            Icons.psychology_rounded,
-            color: AppColors.cyberBlue,
-            size: 24,
+          child: ClipOval(
+            child: Image.asset(
+              'assets/images/app_logo.png',
+              fit: BoxFit.cover,
+            ),
           ),
         ),
       ),

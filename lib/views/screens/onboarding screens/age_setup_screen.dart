@@ -22,7 +22,7 @@ class AgeSetupScreen extends StatefulWidget {
 class _AgeSetupScreenState extends State<AgeSetupScreen> {
   int _age = 28;
 
-  static const int _minAge = 18;
+  static const int _minAge = 1;
   static const int _maxAge = 80;
 
   void _increment() {
@@ -41,7 +41,7 @@ class _AgeSetupScreenState extends State<AgeSetupScreen> {
 
   void _proceed() {
     context.read<UserSetupViewModel>().setAge(_age);
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, animation, _) => const BudgetSetupScreen(),
         transitionsBuilder: (_, animation, _, child) =>
@@ -49,6 +49,10 @@ class _AgeSetupScreenState extends State<AgeSetupScreen> {
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
+  }
+
+  void _goBack() {
+    Navigator.of(context).pop();
   }
 
   @override
@@ -60,12 +64,64 @@ class _AgeSetupScreenState extends State<AgeSetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // ── KOMUT KONSOLU başlığı ────────────────────────────────────────
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: AppDimensions.spaceXL),
-              child: Text(
-                'KOMUT KONSOLU',
-                style: AppTextStyles.displayMedium,
-                textAlign: TextAlign.center,
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.pagePaddingH,
+                vertical: AppDimensions.spaceL,
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: _goBack,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.glass08,
+                        borderRadius: BorderRadius.circular(
+                          AppDimensions.radiusFull,
+                        ),
+                        border: Border.all(color: AppColors.glass12),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_rounded,
+                        size: 20,
+                        color: AppColors.onSurface,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Text(
+                        'ADIM 02/04',
+                        style: AppTextStyles.labelCaps.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: AppDimensions.spaceM),
+                      SizedBox(
+                        width: 48,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            AppDimensions.radiusFull,
+                          ),
+                          child: const SizedBox(
+                            height: 3,
+                            child: LinearProgressIndicator(
+                              value: 2 / 4,
+                              backgroundColor: AppColors.glass08,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.neonLime,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             // thin divider
@@ -123,7 +179,7 @@ class _AgeCard extends StatelessWidget {
     required this.onAgeChanged,
   });
 
-  double get _progress => (age - minAge) / (maxAge - minAge);
+  double get _progress => 2 / 4;
 
   @override
   Widget build(BuildContext context) {
@@ -245,23 +301,16 @@ class _StepRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = (progress * 100).round();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Text(
               'ADIM 02/04',
               style: AppTextStyles.labelCaps.copyWith(
                 color: AppColors.onSurfaceVariant,
-              ),
-            ),
-            Text(
-              '$pct% TAMAMLANDI',
-              style: AppTextStyles.labelCaps.copyWith(
-                color: AppColors.cyberBlue,
               ),
             ),
           ],

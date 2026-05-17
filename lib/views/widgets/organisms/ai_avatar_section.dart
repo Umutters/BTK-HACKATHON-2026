@@ -52,10 +52,14 @@ class AiAvatarSection extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.smart_toy_rounded,
-                size: 80,
-                color: AppColors.cyberBlue,
+              child: ClipOval(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
             ),
           ],

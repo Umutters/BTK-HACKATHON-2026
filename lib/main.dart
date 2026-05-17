@@ -41,6 +41,16 @@ Future<bool> _checkOnboardingDone() async {
     return true;
   }
 
+  // Supabase anahtarları yoksa sadece local veriye düş.
+  if (AppEnv.supabaseUrl.isEmpty || AppEnv.supabaseAnonKey.isEmpty) {
+    final hasProfile = await localDataSource.hasProfile();
+    if (hasProfile) {
+      await localDataSource.setOnboardingDone(true);
+      return true;
+    }
+    return false;
+  }
+
   final supabase = SupabaseService.instance;
   final userId = supabase.currentUserId;
 

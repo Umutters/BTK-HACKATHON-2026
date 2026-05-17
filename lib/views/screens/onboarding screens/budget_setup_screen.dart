@@ -9,7 +9,7 @@ import '../../../viewmodels/user_setup_viewmodel.dart';
 import '../../widgets/atoms/ff_button.dart';
 import 'goal_setup_screen.dart';
 
-/// Step 03/05 — Starting budget selection.
+/// Step 03/04 — Starting budget selection.
 class BudgetSetupScreen extends StatefulWidget {
   const BudgetSetupScreen({super.key});
 
@@ -27,11 +27,6 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
   static const Map<_Currency, List<double>> _presets = {
     _Currency.usd: [5000, 10000, 50000],
     _Currency.try_: [50000, 100000, 500000],
-  };
-
-  static const Map<_Currency, double> _minimums = {
-    _Currency.usd: 1000,
-    _Currency.try_: 10000,
   };
 
   @override
@@ -59,7 +54,7 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
     super.dispose();
   }
 
-  bool get _canProceed => _amount >= (_minimums[_currency] ?? 0);
+  bool get _canProceed => _amount > 0;
 
   void _selectCurrency(_Currency c) {
     HapticFeedback.selectionClick();
@@ -85,7 +80,7 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
       _currency == _Currency.usd ? SetupCurrency.usd : SetupCurrency.try_,
     );
     vm.setBudgetAmount(_amount);
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, animation, _) => const GoalSetupScreen(),
         transitionsBuilder: (_, animation, _, child) =>
@@ -107,7 +102,7 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
         child: Column(
           children: [
             // ── Top header bar ───────────────────────────────────────────────
-            _TopHeader(currentStep: 3, totalSteps: 5),
+            _TopHeader(currentStep: 3, totalSteps: 4, onBack: _goBack),
             Container(height: 1, color: AppColors.glass08),
 
             // ── Scrollable body ──────────────────────────────────────────────
@@ -150,7 +145,6 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
                       currency: _currency,
                       amount: _amount,
                       presets: _presets[_currency]!,
-                      minimum: _minimums[_currency]!,
                       amountController: _amountController,
                       amountFocus: _amountFocus,
                       onCurrencyChanged: _selectCurrency,
@@ -164,34 +158,6 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
                       onTap: _canProceed ? _proceed : null,
                       variant: FfButtonVariant.primary,
                       width: double.infinity,
-                    ),
-                    const SizedBox(height: AppDimensions.spaceM),
-
-                    // Geri Dön button
-                    _BackButton(onTap: _goBack),
-                    const SizedBox(height: AppDimensions.spaceXXL),
-
-                    // Bottom info cards
-                    Row(
-                      children: const [
-                        Expanded(
-                          child: _InfoCard(
-                            iconData: Icons.security_rounded,
-                            iconColor: AppColors.cyberBlue,
-                            label: 'GÜVENLİ İŞLEM',
-                            description: 'Uçtan uca şifreli veri simülasyonu.',
-                          ),
-                        ),
-                        SizedBox(width: AppDimensions.spaceM),
-                        Expanded(
-                          child: _InfoCard(
-                            iconData: Icons.bar_chart_rounded,
-                            iconColor: AppColors.neonLime,
-                            label: 'GERÇEK VERİ',
-                            description: 'Anlık global piyasa entegrasyonu.',
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -209,8 +175,13 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
 class _TopHeader extends StatelessWidget {
   final int currentStep;
   final int totalSteps;
+  final VoidCallback onBack;
 
-  const _TopHeader({required this.currentStep, required this.totalSteps});
+  const _TopHeader({
+    required this.currentStep,
+    required this.totalSteps,
+    required this.onBack,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -222,15 +193,25 @@ class _TopHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Brand name
-          Text(
-            'KOMUT KONSOLU',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: AppColors.neonLime,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
+          GestureDetector(
+            onTap: onBack,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.glass08,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                border: Border.all(color: AppColors.glass12),
+              ),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                size: 20,
+                color: AppColors.onSurface,
+              ),
             ),
           ),
+          // Brand name
+
           // Step indicator
           Row(
             children: [
@@ -238,7 +219,7 @@ class _TopHeader extends StatelessWidget {
                 'ADIM ${currentStep.toString().padLeft(2, '0')}/${totalSteps.toString().padLeft(2, '0')}',
                 style: AppTextStyles.labelCaps.copyWith(
                   color: AppColors.onSurfaceVariant,
-                  letterSpacing: 1.2,
+                  letterSpacing: 1.8,
                 ),
               ),
               const SizedBox(width: AppDimensions.spaceM),
@@ -305,7 +286,6 @@ class _BudgetCard extends StatelessWidget {
   final _Currency currency;
   final double amount;
   final List<double> presets;
-  final double minimum;
   final TextEditingController amountController;
   final FocusNode amountFocus;
   final void Function(_Currency) onCurrencyChanged;
@@ -315,7 +295,6 @@ class _BudgetCard extends StatelessWidget {
     required this.currency,
     required this.amount,
     required this.presets,
-    required this.minimum,
     required this.amountController,
     required this.amountFocus,
     required this.onCurrencyChanged,
@@ -330,16 +309,6 @@ class _BudgetCard extends StatelessWidget {
         .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '${currency.symbol}$intPart';
-  }
-
-  String _formatMin(double v) {
-    final intPart = v
-        .toStringAsFixed(2)
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+\.)'),
           (m) => '${m[1]},',
         );
     return '${currency.symbol}$intPart';
@@ -428,23 +397,9 @@ class _BudgetCard extends StatelessWidget {
           ),
           const SizedBox(height: AppDimensions.spaceM),
 
-          // Min + bonus row
+          // Bonus row
           Row(
             children: [
-              const Icon(
-                Icons.info_outline_rounded,
-                size: 14,
-                color: AppColors.onSurfaceVariant,
-              ),
-              const SizedBox(width: AppDimensions.spaceXS),
-              Text(
-                'MİNİMUM: ${_formatMin(minimum)}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spaceM),
               Text(
                 '+ BAŞLANGIÇ BONUSU: %5',
                 style: AppTextStyles.labelSmall.copyWith(
@@ -604,92 +559,6 @@ class _PresetButton extends StatelessWidget {
             color: selected ? AppColors.neonLime : AppColors.onSurface,
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ─── Back button ──────────────────────────────────────────────────────────────
-
-class _BackButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _BackButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.onSurface,
-          padding: const EdgeInsets.symmetric(vertical: AppDimensions.spaceL),
-          side: const BorderSide(color: AppColors.glass15, width: 1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-          ),
-          backgroundColor: AppColors.glass05,
-        ),
-        child: Text(
-          'GERİ DÖN',
-          style: AppTextStyles.labelLarge.copyWith(
-            color: AppColors.onSurface,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Bottom info card ─────────────────────────────────────────────────────────
-
-class _InfoCard extends StatelessWidget {
-  final IconData iconData;
-  final Color iconColor;
-  final String label;
-  final String description;
-
-  const _InfoCard({
-    required this.iconData,
-    required this.iconColor,
-    required this.label,
-    required this.description,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.spaceL),
-      decoration: BoxDecoration(
-        color: AppColors.glass05,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-        border: Border.all(color: AppColors.glass12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(iconData, color: iconColor, size: AppDimensions.iconM),
-          const SizedBox(height: AppDimensions.spaceS),
-          Text(
-            label,
-            style: AppTextStyles.labelCaps.copyWith(
-              fontSize: 10,
-              letterSpacing: 1.2,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spaceXS),
-          Text(
-            description,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-              height: 1.4,
-              fontSize: 12,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -108,6 +108,7 @@ class UserSetupViewModel extends ChangeNotifier {
     final local = LocalDataSource();
     await local.saveProfile(profile);
     await local.saveSelectedGoal(goalId: _goalId ?? '', goalName: _goalName);
+    await local.savePreferredCurrency(currencyLabel);
     await local.setOnboardingDone(true);
 
     // Supabase'e insert et (signed-in kullanıcı varsa)

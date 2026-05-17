@@ -112,10 +112,11 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.smart_toy_rounded,
-                color: AppColors.cyberBlue,
-                size: 22,
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/app_logo.png',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ],
@@ -184,84 +185,95 @@ class _LoadedView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = vm.user!;
-    return SingleChildScrollView(
-      controller: scrollController,
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: AppDimensions.spaceL),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.pagePaddingH,
+    return RefreshIndicator.adaptive(
+      color: AppColors.cyberBlue,
+      backgroundColor: AppColors.surface,
+      onRefresh: () => context.read<HomeViewModel>().refresh(),
+      child: SingleChildScrollView(
+        controller: scrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: AppDimensions.spaceL),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.pagePaddingH,
+              ),
+              child: LevelProgressCard(
+                level: user.level,
+                currentXp: user.currentXp,
+                maxXp: user.maxXp,
+              ),
             ),
-            child: LevelProgressCard(
-              level: user.level,
-              currentXp: user.currentXp,
-              maxXp: user.maxXp,
+            const SizedBox(height: AppDimensions.spaceL),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.pagePaddingH,
+              ),
+              child: _BalanceSpotlightCard(
+                currencySymbol: vm.currencySymbol,
+                currentBalance: vm.currentBalance,
+                savingsPool: vm.savingsPool,
+              ),
             ),
-          ),
-          const SizedBox(height: AppDimensions.spaceL),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.pagePaddingH,
+            const SizedBox(height: AppDimensions.spaceL),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.pagePaddingH,
+              ),
+              child: _KrizBildirButton(),
             ),
-            child: _BalanceSpotlightCard(
-              currentBalance: vm.currentBalance,
-              savingsPool: vm.savingsPool,
+            const SizedBox(height: AppDimensions.spaceL),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.pagePaddingH,
+              ),
+              child: _TransactionsCard(
+                currencySymbol: vm.currencySymbol,
+                transactions: vm.recentTransactions,
+                allTransactions: vm.allTransactions,
+              ),
             ),
-          ),
-          const SizedBox(height: AppDimensions.spaceL),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.pagePaddingH,
+            const SizedBox(height: AppDimensions.spaceXXL),
+            DailyQuestsSection(
+              quests: vm.quests,
+              completedCount: vm.completedQuestsCount,
+              onStartQuest: vm.startQuest,
             ),
-            child: _KrizBildirButton(),
-          ),
-          const SizedBox(height: AppDimensions.spaceL),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.pagePaddingH,
+            const SizedBox(height: AppDimensions.spaceXXL),
+            _CrisisHistorySection(crisisEvents: vm.crisisEvents),
+            const SizedBox(height: AppDimensions.spaceXXL),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.pagePaddingH,
+              ),
+              child: FfButton(
+                label: 'Yapay Zeka Asistanına Geç',
+                onTap: () {
+                  context.read<NavigationViewModel>().setIndex(1);
+                },
+                variant: FfButtonVariant.primary,
+                width: double.infinity,
+              ),
             ),
-            child: _TransactionsCard(
-              transactions: vm.recentTransactions,
-              allTransactions: vm.allTransactions,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spaceXXL),
-          DailyQuestsSection(
-            quests: vm.quests,
-            completedCount: vm.completedQuestsCount,
-            onStartQuest: vm.startQuest,
-          ),
-          const SizedBox(height: AppDimensions.spaceXXL),
-          _CrisisHistorySection(crisisEvents: vm.crisisEvents),
-          const SizedBox(height: AppDimensions.spaceXXL),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.pagePaddingH,
-            ),
-            child: FfButton(
-              label: 'Yapay Zeka Asistanına Geç',
-              onTap: () {
-                context.read<NavigationViewModel>().setIndex(1);
-              },
-              variant: FfButtonVariant.primary,
-              width: double.infinity,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.space3XL),
-        ],
+            const SizedBox(height: AppDimensions.space3XL),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _BalanceSpotlightCard extends StatelessWidget {
+  final String currencySymbol;
   final double currentBalance;
   final double savingsPool;
 
   const _BalanceSpotlightCard({
+    required this.currencySymbol,
     required this.currentBalance,
     required this.savingsPool,
   });
@@ -272,7 +284,7 @@ class _BalanceSpotlightCard extends StatelessWidget {
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (match) => '${match[1]}.',
     );
-    return '$grouped TL';
+    return '$grouped $currencySymbol';
   }
 
   @override
@@ -359,10 +371,12 @@ class _BalanceSpotlightCard extends StatelessWidget {
 }
 
 class _TransactionsCard extends StatelessWidget {
+  final String currencySymbol;
   final List<RecurringTransactionModel> transactions;
   final List<RecurringTransactionModel> allTransactions;
 
   const _TransactionsCard({
+    required this.currencySymbol,
     required this.transactions,
     required this.allTransactions,
   });
@@ -373,7 +387,7 @@ class _TransactionsCard extends StatelessWidget {
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (match) => '${match[1]}.',
     );
-    return '$grouped TL';
+    return '$grouped $currencySymbol';
   }
 
   Future<void> _showAll(BuildContext context) {
@@ -381,7 +395,10 @@ class _TransactionsCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AllTransactionsSheet(transactions: allTransactions),
+      builder: (_) => _AllTransactionsSheet(
+        transactions: allTransactions,
+        currencySymbol: currencySymbol,
+      ),
     );
   }
 
@@ -629,9 +646,13 @@ class _CrisisHistorySectionState extends State<_CrisisHistorySection> {
 }
 
 class _AllTransactionsSheet extends StatelessWidget {
+  final String currencySymbol;
   final List<RecurringTransactionModel> transactions;
 
-  const _AllTransactionsSheet({required this.transactions});
+  const _AllTransactionsSheet({
+    required this.transactions,
+    required this.currencySymbol,
+  });
 
   String _formatMoney(double amount) {
     final raw = amount.toStringAsFixed(0);
@@ -639,7 +660,7 @@ class _AllTransactionsSheet extends StatelessWidget {
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (match) => '${match[1]}.',
     );
-    return '$grouped TL';
+    return '$grouped $currencySymbol';
   }
 
   @override

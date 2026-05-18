@@ -329,7 +329,7 @@ class _BalanceSpotlightCard extends StatelessWidget {
               ),
               const SizedBox(width: AppDimensions.spaceM),
               Text(
-                'BALANCE',
+                'BAKİYE',
                 style: AppTextStyles.labelCaps.copyWith(
                   color: AppColors.cyberBlueDim,
                   letterSpacing: 1.6,
@@ -357,7 +357,7 @@ class _BalanceSpotlightCard extends StatelessWidget {
               border: Border.all(color: AppColors.neonLime30),
             ),
             child: Text(
-              'Savings Pool: ${_formatMoney(savingsPool)}',
+              'TASARRUF HAVUZU: ${_formatMoney(savingsPool)}',
               style: AppTextStyles.labelMedium.copyWith(
                 color: AppColors.neonLime,
                 fontWeight: FontWeight.w700,

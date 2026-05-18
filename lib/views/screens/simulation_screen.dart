@@ -1035,7 +1035,7 @@ class _ProjectionTableCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'İleriye Dönük Hedef TABLOSU',
+            'İLERLEYEN YILLAR',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.cyberBlueDim,
               letterSpacing: 1.2,

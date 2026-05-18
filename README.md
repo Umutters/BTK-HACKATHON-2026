@@ -16,7 +16,7 @@ Kullanıcının `savings_pool` (Tasarruf Havuzu) verisini ve günlük harcama al
 * **Optimize Rota (Optimized Path):** İnteraktif slider'lar vasıtasıyla eklenen günlük tasarruflar ve Oracle önerileriyle ulaşılabilecek finansal zirve.
 
 ### 🤖 2. AI Oracle Chat & XAI Katmanı
-Gemini Flash API (`google_generative_ai`) ile entegre çalışan, `systemInstruction` mimarisiyle güçlendirilmiş finansal kahin. Sadece ham verileri değil, finansal kararların arkasındaki psikolojik ve mantıksal nedenleri Açıklanabilir AI (XAI) prensipleriyle analiz eder, fütüristik metaforlarla kullanıcıya sunar.
+Gemini Flash API (`google_generative_ai`) ile entegre çalışan, `systemInstruction` mimarisiyle güçlendirilmiş finansal kahin. Sadece ham verileri değil, finansal kararların arkasındaki psikolojik ve mantıksal nedenleri  analiz eder, fütüristik metaforlarla kullanıcıya sunar.
 
 ### 🚨 3. Kullanıcı Girdili Kriz Olayları (Financial Shock Mechanism)
 Gerçek hayatın dinamizmini simüle eden oyunlaştırma tabanlı kriz yönetim mekanizması:

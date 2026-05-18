@@ -24,6 +24,12 @@ class LocalDataSource {
   static const _currencyKey = 'ldb_currency';
   static const _dailyReconcileProcessedKey = 'ldb_daily_reconcile_processed';
 
+  // ─── Settings & Preferences ──────────────────────────────────────────────
+  static const _notificationsKey = 'ldb_notifications';
+  static const _themeSettingsKey = 'ldb_theme_settings';
+  static const _aiPreferencesKey = 'ldb_ai_preferences';
+  static const _dataManagementKey = 'ldb_data_management';
+
   /// main.dart'ta önceden başlatılır.
   static SharedPreferences? sharedPrefs;
 
@@ -430,6 +436,90 @@ class LocalDataSource {
     }
   }
 
+  // ─── Notifications Settings ──────────────────────────────────────────────
+
+  Future<Map<String, bool>> getNotificationsSettings() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_notificationsKey);
+    if (json == null) {
+      return {
+        'expenseNotifications': true,
+        'questNotifications': true,
+        'aiSuggestionsNotifications': true,
+        'crisisAlerts': true,
+      };
+    }
+    return Map<String, bool>.from(jsonDecode(json) as Map<String, dynamic>);
+  }
+
+  Future<void> saveNotificationsSettings(Map<String, bool> settings) async {
+    final prefs = await _prefs;
+    await prefs.setString(_notificationsKey, jsonEncode(settings));
+  }
+
+  // ─── Theme Settings ──────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getThemeSettings() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_themeSettingsKey);
+    if (json == null) {
+      return {
+        'darkMode': true,
+        'neonEffects': true,
+        'glassEffect': true,
+        'brightnessLevel': 5,
+      };
+    }
+    return jsonDecode(json) as Map<String, dynamic>;
+  }
+
+  Future<void> saveThemeSettings(Map<String, dynamic> settings) async {
+    final prefs = await _prefs;
+    await prefs.setString(_themeSettingsKey, jsonEncode(settings));
+  }
+
+  // ─── AI Preferences ───────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getAiPreferences() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_aiPreferencesKey);
+    if (json == null) {
+      return {
+        'responseLength': 'moderate',
+        'useImages': true,
+        'useTables': true,
+        'confidenceThreshold': 7,
+        'language': 'tr',
+      };
+    }
+    return jsonDecode(json) as Map<String, dynamic>;
+  }
+
+  Future<void> saveAiPreferences(Map<String, dynamic> preferences) async {
+    final prefs = await _prefs;
+    await prefs.setString(_aiPreferencesKey, jsonEncode(preferences));
+  }
+
+  // ─── Data Management ──────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getDataManagementSettings() async {
+    final prefs = await _prefs;
+    final json = prefs.getString(_dataManagementKey);
+    if (json == null) {
+      return {
+        'autoBackup': true,
+        'autoBackupFrequency': 7,
+        'lastBackupDate': null,
+      };
+    }
+    return jsonDecode(json) as Map<String, dynamic>;
+  }
+
+  Future<void> saveDataManagementSettings(Map<String, dynamic> settings) async {
+    final prefs = await _prefs;
+    await prefs.setString(_dataManagementKey, jsonEncode(settings));
+  }
+
   // ─── Temizle (logout / reset) ─────────────────────────────────────────────
 
   Future<void> clearAll() async {
@@ -445,6 +535,10 @@ class LocalDataSource {
       prefs.remove(_goalIdKey),
       prefs.remove(_goalNameKey),
       prefs.remove(_currencyKey),
+      prefs.remove(_notificationsKey),
+      prefs.remove(_themeSettingsKey),
+      prefs.remove(_aiPreferencesKey),
+      prefs.remove(_dataManagementKey),
     ]);
   }
 }

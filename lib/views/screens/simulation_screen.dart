@@ -180,6 +180,14 @@ class _FinanceSnapshotCard extends StatelessWidget {
               letterSpacing: 1.4,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Bilgi için metrik kutusuna basılı tut',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 10,
+            ),
+          ),
           const SizedBox(height: AppDimensions.spaceM),
           Row(
             children: [
@@ -188,6 +196,9 @@ class _FinanceSnapshotCard extends StatelessWidget {
                   label: 'Aylık net akış',
                   value:
                       '${monthlyNet.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
+                  infoTitle: 'Aylık net akış',
+                  infoText:
+                      'Formül: Aylık gelir - aylık gider. Tasarruf transferi bu değerden ayrıca düşülmez.',
                 ),
               ),
               const SizedBox(width: AppDimensions.spaceM),
@@ -195,6 +206,9 @@ class _FinanceSnapshotCard extends StatelessWidget {
                 child: _MetricBox(
                   label: 'Tasarruf oranı',
                   value: '%${savingsRate.toStringAsFixed(1)}',
+                  infoTitle: 'Tasarruf oranı',
+                  infoText:
+                      'Formül: (Aylık tasarruf transferi / aylık gelir) x 100. Gelir yoksa 0 kabul edilir.',
                 ),
               ),
             ],
@@ -206,6 +220,9 @@ class _FinanceSnapshotCard extends StatelessWidget {
                 child: _MetricBox(
                   label: 'Acil fon dayanıklılığı',
                   value: '${runway.toStringAsFixed(1)} ay',
+                  infoTitle: 'Acil fon dayanıklılığı',
+                  infoText:
+                      'Formül: Tasarruf havuzu / aylık zorunlu gider tabanı. Havuzun kaç ay yeteceğini gösterir.',
                 ),
               ),
               const SizedBox(width: AppDimensions.spaceM),
@@ -214,6 +231,9 @@ class _FinanceSnapshotCard extends StatelessWidget {
                   label: 'Güvenli aylık bütçe',
                   value:
                       '${safeBudget.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
+                  infoTitle: 'Güvenli aylık bütçe',
+                  infoText:
+                      'Formül: max(0, aylık gelir - aylık gider). Negatifse 0 gösterilir.',
                 ),
               ),
             ],
@@ -265,6 +285,14 @@ class _SavingsAverageCard extends StatelessWidget {
               letterSpacing: 1.5,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            'Bilgi için metrik kutusuna basılı tut',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+              fontSize: 10,
+            ),
+          ),
           const SizedBox(height: AppDimensions.spaceS),
           Row(
             children: [
@@ -272,6 +300,9 @@ class _SavingsAverageCard extends StatelessWidget {
                 child: _MetricBox(
                   label: 'Günlük ort. aktarım',
                   value: '${daily30.toStringAsFixed(1)} ${vm.currencySymbol}',
+                  infoTitle: 'Günlük ortalama aktarım',
+                  infoText:
+                      'Son 30 günlük aktarım verisinden uç değerler kırpılarak hesaplanan ortalamadır.',
                 ),
               ),
               const SizedBox(width: AppDimensions.spaceM),
@@ -280,6 +311,9 @@ class _SavingsAverageCard extends StatelessWidget {
                   label: 'Aylık aktarım',
                   value:
                       '${monthly.toStringAsFixed(0)} ${vm.currencySymbol}/ay',
+                  infoTitle: 'Aylık aktarım',
+                  infoText:
+                      'Formül: Günlük ortalama aktarım x 30. Tahmini aylık birikim etkisini gösterir.',
                 ),
               ),
             ],
@@ -292,6 +326,9 @@ class _SavingsAverageCard extends StatelessWidget {
                   label: '7 günlük trend',
                   value:
                       '$trendArrow $trendText (%${trendDiff.toStringAsFixed(1)})',
+                  infoTitle: '7 günlük trend',
+                  infoText:
+                      'Son 7 gün ortalaması ile 30 gün ortalaması kıyaslanır. Fark yüzde olarak gösterilir.',
                 ),
               ),
             ],
@@ -305,40 +342,83 @@ class _SavingsAverageCard extends StatelessWidget {
 class _MetricBox extends StatelessWidget {
   final String label;
   final String value;
+  final String? infoTitle;
+  final String? infoText;
 
-  const _MetricBox({required this.label, required this.value});
+  const _MetricBox({
+    required this.label,
+    required this.value,
+    this.infoTitle,
+    this.infoText,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.spaceM),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-        border: Border.all(color: AppColors.glass12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-              fontSize: 11,
+    return GestureDetector(
+      onLongPress: (infoText == null || infoText!.trim().isEmpty)
+          ? null
+          : () => _showMetricInfo(context, infoTitle ?? label, infoText!),
+      child: Container(
+        padding: const EdgeInsets.all(AppDimensions.spaceM),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+          border: Border.all(color: AppColors.glass12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 11,
+              ),
             ),
-          ),
-          const SizedBox(height: AppDimensions.spaceXS),
-          Text(
-            value,
-            style: AppTextStyles.titleMedium.copyWith(
-              color: AppColors.neonLime,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: AppDimensions.spaceXS),
+            Text(
+              value,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.neonLime,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+void _showMetricInfo(BuildContext context, String title, String text) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLow,
+        title: Text(
+          title,
+          style: AppTextStyles.titleLarge.copyWith(color: AppColors.onSurface),
+        ),
+        content: Text(
+          text,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.onSurfaceVariant,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text(
+              'Tamam',
+              style: TextStyle(color: AppColors.cyberBlue),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 // ─── Projection Chart Card ────────────────────────────────────────────────────
@@ -349,6 +429,10 @@ class _ProjectionChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth =
+        MediaQuery.sizeOf(context).width -
+        (AppDimensions.pagePaddingH * 2) -
+        (AppDimensions.spaceL * 2);
     final currentSpots = vm.currentSeries
         .map((p) => FlSpot(p.monthIndex.toDouble(), p.amountMillions))
         .toList();
@@ -362,6 +446,7 @@ class _ProjectionChartCard extends StatelessWidget {
     ];
     final maxY = max(0.1, allValues.reduce(max) * 1.12);
     final maxX = max(12, vm.routeYears * 12).toDouble();
+    final chartWidth = max(viewportWidth, (maxX / 72.0) * viewportWidth);
 
     final crisisLines = vm.crisisMarkers.map((marker) {
       return VerticalLine(
@@ -384,134 +469,140 @@ class _ProjectionChartCard extends StatelessWidget {
       child: Column(
         children: [
           Expanded(
-            child: LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: maxX,
-                minY: 0,
-                maxY: maxY,
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: maxY / 4,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: AppColors.glass12,
-                    strokeWidth: 1,
-                    dashArray: [4, 6],
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 44,
-                      interval: maxY / 4,
-                      getTitlesWidget: (value, meta) {
-                        return Text(
-                          '${value.toStringAsFixed(1)}M',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 9,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      interval: 12,
-                      getTitlesWidget: (value, meta) {
-                        if (value == 0) {
-                          return Text(
-                            '${vm.startYear}',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.cyberBlueDim,
-                              fontSize: 10,
-                            ),
-                          );
-                        }
-
-                        if (value.toInt() % 12 != 0) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final year = vm.startYear + (value ~/ 12).toInt();
-                        return Text(
-                          '$year',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.cyberBlueDim,
-                            fontSize: 10,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                extraLinesData: ExtraLinesData(
-                  horizontalLines: [
-                    HorizontalLine(
-                      y: vm.goalMillions,
-                      color: AppColors.cyberMagenta.withAlpha(180),
-                      strokeWidth: 1.5,
-                      dashArray: [8, 6],
-                    ),
-                  ],
-                  verticalLines: crisisLines,
-                ),
-                lineTouchData: LineTouchData(
-                  enabled: true,
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (_) => AppColors.surfaceContainerLow,
-                    getTooltipItems: (spots) {
-                      return spots.map((spot) {
-                        final isOptimized = spot.barIndex == 1;
-                        final color = isOptimized
-                            ? AppColors.neonLime
-                            : AppColors.cyberBlue;
-                        return LineTooltipItem(
-                          '${isOptimized ? 'Optimize' : 'Mevcut'}\n${spot.y.toStringAsFixed(2)}M ${vm.currencySymbol}',
-                          AppTextStyles.labelSmall.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        );
-                      }).toList();
-                    },
-                  ),
-                ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: currentSpots,
-                    isCurved: true,
-                    barWidth: 2.5,
-                    color: AppColors.cyberBlue,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: SizedBox(
+                width: chartWidth,
+                child: LineChart(
+                  LineChartData(
+                    minX: 0,
+                    maxX: maxX,
+                    minY: 0,
+                    maxY: maxY,
+                    gridData: FlGridData(
                       show: true,
-                      color: AppColors.cyberBlue.withAlpha(24),
+                      drawVerticalLine: false,
+                      horizontalInterval: maxY / 4,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: AppColors.glass12,
+                        strokeWidth: 1,
+                        dashArray: [4, 6],
+                      ),
                     ),
-                  ),
-                  LineChartBarData(
-                    spots: optimizedSpots,
-                    isCurved: true,
-                    barWidth: 3.0,
-                    color: AppColors.neonLime,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: AppColors.neonLime.withAlpha(20),
+                    titlesData: FlTitlesData(
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 44,
+                          interval: maxY / 4,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              '${value.toStringAsFixed(1)}M',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 9,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 28,
+                          interval: 12,
+                          getTitlesWidget: (value, meta) {
+                            final yearStep = vm.routeYears <= 12 ? 2 : 5;
+                            final monthStep = yearStep * 12;
+
+                            final isStart = value == 0;
+                            final isEnd = value == maxX;
+                            final isStepped =
+                                value.toInt() > 0 &&
+                                value.toInt() % monthStep == 0;
+
+                            if (!isStart && !isEnd && !isStepped) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final year = vm.startYear + (value ~/ 12).toInt();
+                            return Text(
+                              '$year',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.cyberBlueDim,
+                                fontSize: 10,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
+                    borderData: FlBorderData(show: false),
+                    extraLinesData: ExtraLinesData(
+                      horizontalLines: [
+                        HorizontalLine(
+                          y: vm.goalMillions,
+                          color: AppColors.cyberMagenta.withAlpha(180),
+                          strokeWidth: 1.5,
+                          dashArray: [8, 6],
+                        ),
+                      ],
+                      verticalLines: crisisLines,
+                    ),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (_) => AppColors.surfaceContainerLow,
+                        getTooltipItems: (spots) {
+                          return spots.map((spot) {
+                            final isOptimized = spot.barIndex == 1;
+                            final color = isOptimized
+                                ? AppColors.neonLime
+                                : AppColors.cyberBlue;
+                            return LineTooltipItem(
+                              '${isOptimized ? 'Optimize' : 'Mevcut'}\n${spot.y.toStringAsFixed(2)}M ${vm.currencySymbol}',
+                              AppTextStyles.labelSmall.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: currentSpots,
+                        isCurved: true,
+                        barWidth: 2.5,
+                        color: AppColors.cyberBlue,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: AppColors.cyberBlue.withAlpha(24),
+                        ),
+                      ),
+                      LineChartBarData(
+                        spots: optimizedSpots,
+                        isCurved: true,
+                        barWidth: 3.0,
+                        color: AppColors.neonLime,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: AppColors.neonLime.withAlpha(20),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -584,6 +675,7 @@ class _AiInsightCardState extends State<_AiInsightCard> {
   Widget build(BuildContext context) {
     final vm = widget.vm;
     final text = vm.aiInsight;
+    final scenarioReason = vm.aiScenarioReason;
     final isGenerating = vm.isGeneratingAi;
     final hasText = text.trim().isNotEmpty;
 
@@ -703,7 +795,52 @@ class _AiInsightCardState extends State<_AiInsightCard> {
                 color: AppColors.onSurfaceVariant,
               ),
             ),
+          if (scenarioReason.trim().isNotEmpty) ...[
+            const SizedBox(height: AppDimensions.spaceM),
+            Text(
+              'AI Senaryo Notu: $scenarioReason',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.neonLime,
+                height: 1.4,
+              ),
+            ),
+          ],
           const SizedBox(height: AppDimensions.spaceL),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: isGenerating
+                  ? null
+                  : () {
+                      setState(() => _expanded = false);
+                      context
+                          .read<SimulationViewModel>()
+                          .applyAiScenarioSuggestion();
+                    },
+              icon: isGenerating
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_graph_rounded, size: 16),
+              label: Text(
+                isGenerating
+                    ? 'AI Senaryosu Hesaplanıyor...'
+                    : 'AI Senaryosunu Uygula',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.neonLime,
+                foregroundColor: AppColors.background,
+                disabledBackgroundColor: AppColors.surfaceContainerHigh,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                textStyle: AppTextStyles.labelMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spaceS),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -883,7 +1020,7 @@ class _ProjectionTableCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = vm.projectionRows;
     final sampledRows = rows
-        .where((r) => (r.year - vm.startYear) % 2 == 0)
+        .where((r) => r.year > vm.startYear && (r.year - vm.startYear) % 2 == 0)
         .toList();
 
     return Container(
@@ -898,7 +1035,7 @@ class _ProjectionTableCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '5 YILLIK TAHMİN TABLOSU',
+            'İleriye Dönük Hedef TABLOSU',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.cyberBlueDim,
               letterSpacing: 1.2,
@@ -1015,23 +1152,24 @@ class _WhatIfSlidersPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppDimensions.spaceM),
           _SliderRow(
-            label: 'Hedef Ufku (Yıl)',
-            value: vm.routeYears.toDouble(),
-            min: 5,
-            max: 30,
+            label: 'Bitiş Yılı',
+            value: vm.endYear.toDouble(),
+            min: (vm.startYear + 1).toDouble(),
+            max: (vm.startYear + 60).toDouble(),
             displayValue:
-                '${vm.routeYears} yıl${vm.targetAge != null ? ' • ${vm.targetAge} yaş' : ''}',
+                '${vm.endYear}${vm.targetAge != null ? ' • ${vm.targetAge} yaş' : ''}',
             onChanged: (v) => context
                 .read<SimulationViewModel>()
-                .setProjectionHorizonYears(v),
+                .setProjectionHorizonYears(v - vm.startYear),
           ),
           const SizedBox(height: AppDimensions.spaceM),
           _SliderRow(
             label: 'Günlük Ek Tasarruf',
             value: vm.extraDailySavings,
             min: 0,
-            max: 500,
-            displayValue: '${vm.extraDailySavings.round()} TL',
+            max: vm.maxExtraDailySavings,
+            displayValue:
+                '${vm.extraDailySavings.round()} TL / max ${vm.maxExtraDailySavings.round()} TL',
             onChanged: (v) =>
                 context.read<SimulationViewModel>().setExtraDailySavings(v),
           ),

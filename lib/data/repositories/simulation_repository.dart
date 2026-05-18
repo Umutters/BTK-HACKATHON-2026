@@ -34,7 +34,20 @@ class SimulationRepository {
     if (!_canUseSupabase) return _localDataSource.getProfile();
 
     try {
-      return await _supabaseDataSource.getUserProfile();
+      final profile = await _supabaseDataSource.getUserProfile();
+      final savingsTotal = await _supabaseDataSource.getSavingsTotal();
+      return ProfileModel(
+        id: profile.id,
+        userName: profile.userName,
+        age: profile.age,
+        gender: profile.gender,
+        initialBalance: profile.initialBalance,
+        currentBalance: profile.currentBalance,
+        savingsPool: savingsTotal,
+        level: profile.level,
+        xp: profile.xp,
+        dailyLimit: profile.dailyLimit,
+      );
     } catch (_) {
       return _localDataSource.getProfile();
     }

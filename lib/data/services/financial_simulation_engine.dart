@@ -68,29 +68,36 @@ class FinancialSimulationEngine {
     required double defaultAnnualReturnRate,
     required String goalId,
   }) {
+    final sortedLogs = [...logs]..sort((a, b) => b.date.compareTo(a.date));
+
     final monthlyIncome = transactions
         .where((t) => t.isIncome)
         .fold<double>(0, (sum, t) => sum + t.amount);
     final monthlyExpense = transactions
         .where((t) => t.isExpense)
         .fold<double>(0, (sum, t) => sum + t.amount);
-    final monthlySavingsTransfer = logs.isEmpty
-        ? 0.0
-        : (logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-                  logs.length) *
-              30;
-    final monthlyNetCashflow =
-        monthlyIncome - monthlyExpense - monthlySavingsTransfer;
+
+    final avgDailyTransferred30 = _averageDailyTransfer(sortedLogs);
+    final avgDailyTransferred7 = _averageDailyTransfer(sortedLogs.take(7));
+
+    final rawMonthlySavingsTransfer = avgDailyTransferred30 * 30;
+    final monthlySavingsTransfer = monthlyIncome <= 0
+        ? rawMonthlySavingsTransfer
+        : rawMonthlySavingsTransfer.clamp(0.0, monthlyIncome);
+
+    // Net nakit akışında transferi ikinci kez gider yazmayız;
+    // transfer ayrı metrik olarak gösteriliyor.
+    final monthlyNetCashflow = monthlyIncome - monthlyExpense;
+
     final monthlySurplus = _estimateMonthlySurplus(
-      profile: profile,
       transactions: transactions,
-      logs: logs,
+      monthlySavingsTransfer: monthlySavingsTransfer,
     );
 
-    final safeMonthlyBudget = max(0.0, monthlyNetCashflow);
+    final safeMonthlyBudget = max(0.0, monthlyIncome - monthlyExpense);
     final savingsRatePercent = monthlyIncome <= 0
         ? 0.0
-        : (monthlySavingsTransfer / monthlyIncome) * 100;
+        : ((monthlySavingsTransfer / monthlyIncome) * 100).clamp(0.0, 100.0);
     final emergencyExpenseBase = max(
       monthlyExpense,
       (profile?.dailyLimit ?? 0) * 30,
@@ -98,20 +105,6 @@ class FinancialSimulationEngine {
     final emergencyRunwayMonths = emergencyExpenseBase <= 0 || profile == null
         ? 0.0
         : profile.savingsPool / emergencyExpenseBase;
-    final avgDailyTransferred30 = logs.isEmpty
-        ? 0.0
-        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              logs.length;
-    final avgDailyTransferred7 = logs.isEmpty
-        ? 0.0
-        : logs.length >= 7
-        ? logs
-                  .take(7)
-                  .fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              7
-        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              logs.length;
-
     final baseAmount = _estimateBaseWealth(profile);
     final baseMonthlyContribution = monthlySavingsTransfer;
 
@@ -186,9 +179,8 @@ class FinancialSimulationEngine {
   }
 
   double _estimateMonthlySurplus({
-    required ProfileModel? profile,
     required List<RecurringTransactionModel> transactions,
-    required List<DailyLogModel> logs,
+    required double monthlySavingsTransfer,
   }) {
     final recurringIncome = transactions
         .where((t) => t.isIncome)
@@ -198,18 +190,31 @@ class FinancialSimulationEngine {
         .where((t) => t.isExpense)
         .fold<double>(0, (sum, t) => sum + t.amount);
 
-    final dailyTransferAvg = logs.isEmpty
-        ? 0.0
-        : logs.fold<double>(0, (sum, l) => sum + l.transferredToSavings) /
-              logs.length;
-    final monthlyTransfers = dailyTransferAvg * 30;
+    return recurringIncome - recurringExpense - monthlySavingsTransfer;
+  }
 
-    if (logs.isNotEmpty) {
-      return recurringIncome - recurringExpense + monthlyTransfers;
+  double _averageDailyTransfer(Iterable<DailyLogModel> logs) {
+    final values = logs
+        .map((l) => max(0.0, l.transferredToSavings))
+        .where((v) => v.isFinite)
+        .toList();
+
+    if (values.isEmpty) return 0.0;
+    values.sort();
+
+    if (values.length < 5) {
+      return values.fold<double>(0, (sum, v) => sum + v) / values.length;
     }
 
-    final fallbackDailySpend = (profile?.dailyLimit ?? 0) * 0.8;
-    return recurringIncome - recurringExpense - (fallbackDailySpend * 30);
+    final trim = max(1, (values.length * 0.1).floor());
+    final start = trim;
+    final end = values.length - trim;
+    if (start >= end) {
+      return values.fold<double>(0, (sum, v) => sum + v) / values.length;
+    }
+
+    final trimmed = values.sublist(start, end);
+    return trimmed.fold<double>(0, (sum, v) => sum + v) / trimmed.length;
   }
 
   List<SimulationSeriesPoint> _buildScenarioSeries({

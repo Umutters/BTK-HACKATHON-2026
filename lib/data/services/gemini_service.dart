@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 import '../../core/constants/app_env.dart';
@@ -9,26 +12,38 @@ import '../models/recurring_transaction_model.dart';
 /// Gemini 2.5 Flash ile kâhin sohbetini yönetir.
 /// Her [GeminiService] örneği bağımsız bir sohbet geçmişi tutar.
 class GeminiService {
+  final List<String> _apiKeys;
+  int _activeKeyIndex;
   GenerativeModel _model;
   ChatSession _chat;
+  String _activeSystemInstruction;
 
   static const _baseInstruction =
       'Sen FortuneFlow kişisel finans AI asistanısın. Türkçe yanıt ver.';
+  static final _chatGenerationConfig = GenerationConfig(
+    temperature: 0.7,
+    maxOutputTokens: 2048,
+    topP: 0.95,
+  );
 
   GeminiService()
-    : _model = GenerativeModel(
+    : _apiKeys = AppEnv.geminiApiKeys,
+      _activeKeyIndex = 0,
+      _activeSystemInstruction = _baseInstruction,
+      _model = GenerativeModel(
         model: 'gemini-2.5-flash',
-        apiKey: AppEnv.geminiApiKey,
-        generationConfig: GenerationConfig(
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-          topP: 0.95,
-        ),
+        apiKey: AppEnv.geminiApiKeys.isNotEmpty
+            ? AppEnv.geminiApiKeys.first
+            : '',
+        generationConfig: _chatGenerationConfig,
         systemInstruction: Content.system(_baseInstruction),
       ),
       _chat = GenerativeModel(
         model: 'gemini-2.5-flash',
-        apiKey: AppEnv.geminiApiKey,
+        apiKey: AppEnv.geminiApiKeys.isNotEmpty
+            ? AppEnv.geminiApiKeys.first
+            : '',
+        generationConfig: _chatGenerationConfig,
         systemInstruction: Content.system(_baseInstruction),
       ).startChat();
 
@@ -49,31 +64,117 @@ class GeminiService {
       goalName: goalName,
     );
 
-    // Gerçek kullanıcı verisiyle yeni bir model + chat oturumu aç
-    _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: AppEnv.geminiApiKey,
-      generationConfig: GenerationConfig(
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-        topP: 0.95,
-      ),
-      systemInstruction: Content.system(systemInstruction),
+    _activeSystemInstruction = systemInstruction;
+    if (_apiKeys.isNotEmpty) {
+      _rebuildChatSession();
+    }
+  }
+
+  Future<SimulationAiRecommendation> generateSimulationRecommendation({
+    required ProfileModel profile,
+    required List<RecurringTransactionModel> transactions,
+    required List<DailyLogModel> recentLogs,
+    required String goalName,
+    required int routeYears,
+    required double currentExtraDailySavings,
+    required double maxExtraDailySavings,
+    required double currentAnnualReturnRate,
+    required double monthlySurplus,
+  }) async {
+    final fallback = _fallbackSimulationRecommendation(
+      monthlySurplus: monthlySurplus,
+      currentExtraDailySavings: currentExtraDailySavings,
+      maxExtraDailySavings: maxExtraDailySavings,
+      currentAnnualReturnRate: currentAnnualReturnRate,
     );
-    _chat = _model.startChat();
+
+    if (_apiKeys.isEmpty) {
+      return fallback;
+    }
+
+    final income = transactions
+        .where((t) => t.isIncome)
+        .fold(0.0, (sum, t) => sum + t.amount);
+    final expense = transactions
+        .where((t) => t.isExpense)
+        .fold(0.0, (sum, t) => sum + t.amount);
+
+    final prompt =
+        '''Türkçe finans asistanısın. Kullanıcı simülasyon için öneri istiyor.
+
+Kullanıcı: ${profile.userName}
+Aylık gelir: ${income.toStringAsFixed(0)} TL
+Aylık gider: ${expense.toStringAsFixed(0)} TL
+Aylık surplus: ${monthlySurplus.toStringAsFixed(0)} TL
+Günlük limit: ${profile.dailyLimit.toStringAsFixed(0)} TL
+Hedef: $goalName
+Ufuk: $routeYears yıl
+Mevcut günlük ek tasarruf: ${currentExtraDailySavings.toStringAsFixed(0)} TL
+Mevcut yıllık getiri varsayımı: ${(currentAnnualReturnRate * 100).toStringAsFixed(1)}%
+
+Sadece geçerli JSON döndür:
+{"extraDailySavings": number, "annualReturnRate": number, "reason": "string"}
+
+Kurallar:
+- extraDailySavings 0..${maxExtraDailySavings.toStringAsFixed(0)} arasında olsun.
+- annualReturnRate 0.05..0.25 arasında olsun.
+- reason en fazla 120 karakter olsun.
+- JSON dışında hiçbir metin yazma.''';
+
+    try {
+      final text = await _generateTextWithFailover(
+        prompt: prompt,
+        generationConfig: GenerationConfig(
+          temperature: 0.35,
+          maxOutputTokens: 260,
+          topP: 0.9,
+        ),
+      );
+      if (text == null || text.isEmpty) return fallback;
+
+      final parsed = jsonDecode(text);
+      if (parsed is! Map<String, dynamic>) return fallback;
+
+      final extra = (parsed['extraDailySavings'] as num?)?.toDouble();
+      final annual = (parsed['annualReturnRate'] as num?)?.toDouble();
+      final reason = (parsed['reason'] as String?)?.trim();
+      if (extra == null || annual == null || reason == null || reason.isEmpty) {
+        return fallback;
+      }
+
+      return SimulationAiRecommendation(
+        extraDailySavings: extra.clamp(0.0, maxExtraDailySavings),
+        annualReturnRate: annual.clamp(0.05, 0.25),
+        reason: reason,
+      );
+    } catch (_) {
+      return fallback;
+    }
   }
 
   /// Kullanıcı mesajını Gemini'ye gönderir ve AI yanıtını döndürür.
   /// API key tanımlı değilse demo yanıt döndürür.
   Future<String> sendMessage(String userMessage) async {
-    if (AppEnv.geminiApiKey.isEmpty) {
+    if (_apiKeys.isEmpty) {
       return _demoResponse(userMessage);
     }
-    try {
-      final response = await _chat.sendMessage(Content.text(userMessage));
-      return response.text ?? 'Yanıt alınamadı, lütfen tekrar deneyin.';
-    } catch (e) {
-      final raw = e.toString();
+    Object? lastError;
+    final attempts = _apiKeys.length;
+
+    for (var i = 0; i < attempts; i++) {
+      try {
+        final response = await _chat.sendMessage(Content.text(userMessage));
+        return response.text ?? 'Yanıt alınamadı, lütfen tekrar deneyin.';
+      } catch (e) {
+        lastError = e;
+        final shouldRetry = _isRetryableKeyError(e) && _rotateToNextKey();
+        if (!shouldRetry) break;
+        _rebuildChatSession();
+      }
+    }
+
+    if (lastError != null) {
+      final raw = lastError.toString();
       final lower = raw.toLowerCase();
 
       // API kaynaklı hataları kullanıcıya net bir dille ilet.
@@ -108,6 +209,8 @@ class GeminiService {
 
       return 'Gemini yanıtı alınamadı. Teknik detay: $raw';
     }
+
+    return 'Gemini yanıtı alınamadı, lütfen tekrar deneyin.';
   }
 
   /// Action butonları için: tüm verileri prompt içine gömer, doğrudan
@@ -120,7 +223,7 @@ class GeminiService {
     required String goalName,
     required String question,
   }) async {
-    if (AppEnv.geminiApiKey.isEmpty) return _demoResponse(question);
+    if (_apiKeys.isEmpty) return _demoResponse(question);
 
     final income = transactions
         .where((t) => t.isIncome)
@@ -204,17 +307,14 @@ SORU: $question
 KURAL: Yanıtta sadece bu kullanıcının TL rakamlarını kullan. Markdown yıldız (*) kullanma. 3-5 cümle, her cümlede somut sayı olsun.''';
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: AppEnv.geminiApiKey,
+      final text = await _generateTextWithFailover(
+        prompt: prompt,
         generationConfig: GenerationConfig(
           temperature: 0.5,
           maxOutputTokens: 2800,
           topP: 0.9,
         ),
       );
-      final response = await model.generateContent([Content.text(prompt)]);
-      final text = response.text;
       if (text == null || text.trim().isEmpty) return _demoResponse(question);
       return text.trim();
     } catch (e) {
@@ -242,7 +342,7 @@ KURAL: Yanıtta sadece bu kullanıcının TL rakamlarını kullan. Markdown yıl
     required double monthlySurplus,
     required List<String> topDrivers,
   }) async {
-    if (AppEnv.geminiApiKey.isEmpty) {
+    if (_apiKeys.isEmpty) {
       return _demoSimulationInsight(
         goalName: goalName,
         goalYear: goalYear,
@@ -275,17 +375,14 @@ $topDriverText
 Kural: 120 karakteri geçme. Somut TL rakamı kullan. Fırsat maliyeti, nakit akışı ve toparlanma hızından birini vurgula. Markdown kullanma.''';
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: AppEnv.geminiApiKey,
+      final text = await _generateTextWithFailover(
+        prompt: fullPrompt,
         generationConfig: GenerationConfig(
           temperature: 0.6,
           maxOutputTokens: 512,
           topP: 0.9,
         ),
       );
-      final response = await model.generateContent([Content.text(fullPrompt)]);
-      final text = response.text;
       if (text == null || text.trim().isEmpty) {
         return _demoSimulationInsight(
           goalName: goalName,
@@ -321,7 +418,7 @@ Kural: 120 karakteri geçme. Somut TL rakamı kullan. Fırsat maliyeti, nakit ak
     required double savingsPool,
     required double dailyLimit,
   }) async {
-    if (AppEnv.geminiApiKey.isEmpty) return null;
+    if (_apiKeys.isEmpty) return null;
 
     final prompt =
         '''Türkçe konuşan kişisel finans asistanısın. Kullanıcı hızlı işlem giriyor.
@@ -340,18 +437,14 @@ Görev:
 - Sadece düz metin döndür, yıldız veya markdown kullanma.''';
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: AppEnv.geminiApiKey,
+      final text = await _generateTextWithFailover(
+        prompt: prompt,
         generationConfig: GenerationConfig(
           temperature: 0.4,
           maxOutputTokens: 120,
           topP: 0.9,
         ),
       );
-
-      final response = await model.generateContent([Content.text(prompt)]);
-      final text = response.text?.trim();
       if (text == null || text.isEmpty) return null;
       return text.replaceAll('\n', ' ');
     } catch (_) {
@@ -369,7 +462,7 @@ Görev:
     required double savingsPool,
     required double dailyLimit,
   }) async {
-    if (AppEnv.geminiApiKey.isEmpty) return null;
+    if (_apiKeys.isEmpty) return null;
 
     final prompt =
         '''Türkçe konuşan kişisel finans AI asistanısın. Kullanıcının hızlı işlem ekranındaki girdisini analiz et.
@@ -389,23 +482,86 @@ Görev:
 - Sadece düz metin döndür, markdown kullanma.''';
 
     try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
-        apiKey: AppEnv.geminiApiKey,
+      final text = await _generateTextWithFailover(
+        prompt: prompt,
         generationConfig: GenerationConfig(
           temperature: 0.45,
           maxOutputTokens: 140,
           topP: 0.9,
         ),
       );
-
-      final response = await model.generateContent([Content.text(prompt)]);
-      final text = response.text?.trim();
       if (text == null || text.isEmpty) return null;
       return text.replaceAll('\n', ' ');
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> _generateTextWithFailover({
+    required String prompt,
+    required GenerationConfig generationConfig,
+  }) async {
+    if (_apiKeys.isEmpty) return null;
+
+    Object? lastError;
+    final attempts = _apiKeys.length;
+
+    for (var i = 0; i < attempts; i++) {
+      try {
+        final model = GenerativeModel(
+          model: 'gemini-2.5-flash',
+          apiKey: _apiKeys[_activeKeyIndex],
+          generationConfig: generationConfig,
+        );
+        final response = await model.generateContent([Content.text(prompt)]);
+        return response.text?.trim();
+      } catch (e) {
+        lastError = e;
+        final shouldRetry = _isRetryableKeyError(e) && _rotateToNextKey();
+        if (!shouldRetry) break;
+        _rebuildChatSession();
+      }
+    }
+
+    if (lastError != null) {
+      throw lastError;
+    }
+    return null;
+  }
+
+  bool _rotateToNextKey() {
+    if (_apiKeys.length <= 1) return false;
+    _activeKeyIndex = (_activeKeyIndex + 1) % _apiKeys.length;
+    return true;
+  }
+
+  bool _isRetryableKeyError(Object error) {
+    final lower = error.toString().toLowerCase();
+    return lower.contains('api key expired') ||
+        lower.contains('invalid api key') ||
+        lower.contains('unauthenticated') ||
+        lower.contains('permission denied') ||
+        lower.contains('quota') ||
+        lower.contains('resource exhausted') ||
+        lower.contains('rate limit') ||
+        lower.contains('too many requests') ||
+        lower.contains('(429)') ||
+        lower.contains(' 429 ') ||
+        lower.contains('503') ||
+        lower.contains('unavailable') ||
+        lower.contains('high demand') ||
+        lower.contains('service unavailable');
+  }
+
+  void _rebuildChatSession() {
+    if (_apiKeys.isEmpty) return;
+    _model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: _apiKeys[_activeKeyIndex],
+      generationConfig: _chatGenerationConfig,
+      systemInstruction: Content.system(_activeSystemInstruction),
+    );
+    _chat = _model.startChat();
   }
 
   String _demoResponse(String input) {
@@ -433,6 +589,27 @@ Görev:
   }) {
     final trend = monthlySurplus >= 0 ? 'pozitif' : 'negatif';
     return '$goalName için trend $trend; bu rotada $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M TL görebilirsin ve aylık katkını 1000 TL artırman toparlanmayı belirgin hızlandırır.';
+  }
+
+  SimulationAiRecommendation _fallbackSimulationRecommendation({
+    required double monthlySurplus,
+    required double currentExtraDailySavings,
+    required double maxExtraDailySavings,
+    required double currentAnnualReturnRate,
+  }) {
+    final safeExtra = (monthlySurplus <= 0 ? 0.0 : monthlySurplus * 0.12 / 30)
+        .clamp(0.0, maxExtraDailySavings);
+    final suggestedExtra = (max(
+      currentExtraDailySavings,
+      safeExtra,
+    )).clamp(0.0, maxExtraDailySavings);
+    final suggestedAnnual = (currentAnnualReturnRate + 0.01).clamp(0.05, 0.25);
+    return SimulationAiRecommendation(
+      extraDailySavings: suggestedExtra,
+      annualReturnRate: suggestedAnnual,
+      reason:
+          'Aylık nakit akışına göre günlük ek tasarruf ve getiri varsayımı dengeli artırıldı.',
+    );
   }
 
   String _freqLabel(String frequency) {
@@ -575,4 +752,16 @@ ${ruleExpenseLines.isEmpty ? '  (kayıt yok)' : ruleExpenseLines}
 ''' : ''}${goalName.isNotEmpty ? '─── FİNANSAL HEDEF ───\nHedef: $goalName\n' : ''}
 ''';
   }
+}
+
+class SimulationAiRecommendation {
+  final double extraDailySavings;
+  final double annualReturnRate;
+  final String reason;
+
+  const SimulationAiRecommendation({
+    required this.extraDailySavings,
+    required this.annualReturnRate,
+    required this.reason,
+  });
 }

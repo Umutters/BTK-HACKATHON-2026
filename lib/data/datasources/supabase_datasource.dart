@@ -47,6 +47,12 @@ class SupabaseDataSource {
   Future<void> updateUserXp(String userId, int xp) =>
       _supabase.updateXp(userId, xp);
 
+  Future<double> getSavingsTotal() async {
+    final userId = await _resolveUserId();
+    if (userId == null) return 0.0;
+    return _supabase.getSavingsTotal(userId);
+  }
+
   // ─── Transactions ─────────────────────────────────────────────────────────
 
   Future<List<RecurringTransactionModel>> getRecurringTransactions() async {

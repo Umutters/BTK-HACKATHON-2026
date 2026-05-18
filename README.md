@@ -4,6 +4,21 @@
   <img src="screenshots/1.png" width="30%" alt="Dashboard Screen" />
   <img src="screenshots/2.png" width="30%" alt="Oracle Chat Screen" />
   <img src="screenshots/3.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/4.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/5.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/6.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/7.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/8.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/9.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/10.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/11.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/12.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/13.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/14.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/15.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/16.png" width="30%" alt="Simulation Screen" />
+  <img src="screenshots/17.png" width="30%" alt="Simulation Screen" />
+  
 </p>
 
 FortuneFlow AI, geleneksel bütçe takip uygulamalarının ötesine geçerek davranışsal finansı oyunlaştırma prensipleri ve Açıklanabilir Yapay Zeka (XAI) ile birleştiren fütüristik bir finansal yönetim ve simülasyon platformudur. 

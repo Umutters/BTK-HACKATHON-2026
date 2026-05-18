@@ -100,6 +100,7 @@ class _NavigationShellState extends State<_NavigationShell> {
       homeVm.applyTransactionDelta(result.balanceDelta);
       await homeVm.processSavingsTransfer(result.transferredToSavings);
       await homeVm.refreshTransactions();
+      await context.read<OracleViewModel>().refreshContextSilently();
       if (_screenCache.containsKey(2)) {
         await context.read<SimulationViewModel>().refresh();
       }

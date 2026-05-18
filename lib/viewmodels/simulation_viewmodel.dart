@@ -21,6 +21,8 @@ import '../data/services/gemini_service.dart';
 
 class SimulationViewModel extends ChangeNotifier {
   static const double _defaultAnnualReturnRate = 0.08;
+  static const double _minExtraDailySavingsCap = 1000;
+  static const double _hardMaxExtraDailySavingsCap = 50000;
 
   final GeminiService _geminiService;
   final DateTime Function() _now;
@@ -61,6 +63,7 @@ class SimulationViewModel extends ChangeNotifier {
   String _goalId = '';
   String _currencyCode = 'TRY';
   String? _aiInsightOverride;
+  String? _aiScenarioReason;
 
   ProfileModel? _profile;
   List<RecurringTransactionModel> _transactions = const [];
@@ -92,6 +95,7 @@ class SimulationViewModel extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isGeneratingAi => _isGeneratingAi;
+  double get maxExtraDailySavings => _computeMaxExtraDailySavings();
   double get extraDailySavings => _extraDailySavings;
   double get annualReturnRateSlider => _annualReturnRateSlider;
   int get startYear => _startYear;
@@ -150,9 +154,11 @@ class SimulationViewModel extends ChangeNotifier {
   }
 
   String get aiInsight => _aiInsightOverride ?? '';
+  String get aiScenarioReason => _aiScenarioReason ?? '';
+  bool get hasAiScenarioReason => (_aiScenarioReason ?? '').trim().isNotEmpty;
 
   void setExtraDailySavings(double value) {
-    _extraDailySavings = value.clamp(0, 500);
+    _extraDailySavings = value.clamp(0, maxExtraDailySavings);
     _rebuildProjection();
     notifyListeners();
     unawaited(generateAiInsight());
@@ -172,7 +178,7 @@ class SimulationViewModel extends ChangeNotifier {
   }
 
   void setProjectionHorizonYears(double years) {
-    final nextYears = years.round().clamp(5, 30);
+    final nextYears = years.round().clamp(1, 60);
     if (nextYears == _routeYears) return;
     _routeYears = nextYears;
     _endYear = _startYear + _routeYears;
@@ -215,6 +221,39 @@ class SimulationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> applyAiScenarioSuggestion() async {
+    if (_profile == null || _currentPoints.isEmpty) return;
+
+    _isGeneratingAi = true;
+    notifyListeners();
+
+    final recommendation = await _geminiService
+        .generateSimulationRecommendation(
+          profile: _profile!,
+          transactions: _transactions,
+          recentLogs: _logs,
+          goalName: _goalName,
+          routeYears: _routeYears,
+          currentExtraDailySavings: _extraDailySavings,
+          maxExtraDailySavings: maxExtraDailySavings,
+          currentAnnualReturnRate: _annualReturnRateSlider,
+          monthlySurplus: _monthlySurplus,
+        );
+
+    _extraDailySavings = recommendation.extraDailySavings.clamp(
+      0,
+      maxExtraDailySavings,
+    );
+    _annualReturnRateSlider = recommendation.annualReturnRate.clamp(0.05, 0.25);
+    _aiScenarioReason = recommendation.reason;
+
+    _rebuildProjection();
+    _isGeneratingAi = false;
+    notifyListeners();
+
+    unawaited(generateAiInsight());
+  }
+
   Future<void> _bootstrap() async {
     _isLoading = true;
     notifyListeners();
@@ -238,6 +277,7 @@ class SimulationViewModel extends ChangeNotifier {
     _rebuildProjection();
 
     _aiInsightOverride = null;
+    _aiScenarioReason = null;
     _isLoading = false;
     notifyListeners();
 
@@ -245,6 +285,8 @@ class SimulationViewModel extends ChangeNotifier {
   }
 
   void _rebuildProjection() {
+    _extraDailySavings = _extraDailySavings.clamp(0, maxExtraDailySavings);
+
     final computed = _simulationEngine.compute(
       profile: _profile,
       transactions: _transactions,
@@ -277,6 +319,23 @@ class SimulationViewModel extends ChangeNotifier {
     _transactionImpacts = computed.transactionImpacts;
 
     _goalMillions = computed.goalMillions;
+  }
+
+  double _computeMaxExtraDailySavings() {
+    final dailyLimit = max(0.0, _profile?.dailyLimit ?? 0.0);
+    final monthlyIncomeFromTx = _transactions
+        .where((t) => t.isIncome)
+        .fold<double>(0, (sum, t) => sum + t.amount);
+
+    final fromIncome = monthlyIncomeFromTx <= 0
+        ? 0.0
+        : monthlyIncomeFromTx / 20;
+    final fromDailyLimit = dailyLimit <= 0 ? 0.0 : dailyLimit * 2.5;
+
+    return max(
+      _minExtraDailySavingsCap,
+      max(fromIncome, fromDailyLimit),
+    ).clamp(_minExtraDailySavingsCap, _hardMaxExtraDailySavingsCap);
   }
 
   String _formatCompactMoney(double amount) {

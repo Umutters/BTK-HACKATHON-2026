@@ -89,12 +89,17 @@ class OracleViewModel extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
-    await _loadContextAndSeed(isReset: false, markInitialized: true);
+    await _loadContextAndSeed(
+      isReset: false,
+      markInitialized: true,
+      emitGreetingMessage: true,
+    );
   }
 
   Future<void> _loadContextAndSeed({
     required bool isReset,
     required bool markInitialized,
+    required bool emitGreetingMessage,
   }) async {
     try {
       final snapshot = await _oracleRepository.loadContext();
@@ -126,36 +131,40 @@ class OracleViewModel extends ChangeNotifier {
             .where((t) => t.isExpense)
             .fold(0.0, (s, t) => s + t.amount);
 
-        _addOracleMessage(
-          isReset
-              ? 'Sohbet sıfırlandı. Güncel verilerini yeniden yükledim.\n'
-                    '💰 **${profile.currentBalance.toStringAsFixed(0)} TL** bakiye | '
-                    '🏦 **${profile.savingsPool.toStringAsFixed(0)} TL** havuz | '
-                    '📊 **${(income - expense).toStringAsFixed(0)} TL** aylık net'
-                    '${goalName.isNotEmpty ? ' | Hedef: **$goalName**' : ''}'
-              : 'Merhaba **${profile.userName}**! Tüm finansal verilerini yükledim.\n'
-                    '💰 Bakiye: **${profile.currentBalance.toStringAsFixed(0)} TL** | '
-                    '🏦 Havuz: **${profile.savingsPool.toStringAsFixed(0)} TL** | '
-                    '📊 Aylık net: **${(income - expense).toStringAsFixed(0)} TL**'
-                    '${goalName.isNotEmpty ? ' | Hedef: **$goalName**' : ''}\n'
-                    'Ne analiz edelim?',
-          actionButtons: const [
-            'Harcama analizimi yap',
-            'Hedefime ne zaman ulaşırım?',
-            'Tasarruf önerisi ver',
-            'Düzenli giderlerimi incele',
-          ],
-        );
+        if (emitGreetingMessage) {
+          _addOracleMessage(
+            isReset
+                ? 'Sohbet sıfırlandı. Güncel verilerini yeniden yükledim.\n'
+                      '💰 **${profile.currentBalance.toStringAsFixed(0)} TL** bakiye | '
+                      '🏦 **${profile.savingsPool.toStringAsFixed(0)} TL** havuz | '
+                      '📊 **${(income - expense).toStringAsFixed(0)} TL** aylık net'
+                      '${goalName.isNotEmpty ? ' | Hedef: **$goalName**' : ''}'
+                : 'Merhaba **${profile.userName}**! Tüm finansal verilerini yükledim.\n'
+                      '💰 Bakiye: **${profile.currentBalance.toStringAsFixed(0)} TL** | '
+                      '🏦 Havuz: **${profile.savingsPool.toStringAsFixed(0)} TL** | '
+                      '📊 Aylık net: **${(income - expense).toStringAsFixed(0)} TL**'
+                      '${goalName.isNotEmpty ? ' | Hedef: **$goalName**' : ''}\n'
+                      'Ne analiz edelim?',
+            actionButtons: const [
+              'Harcama analizimi yap',
+              'Hedefime ne zaman ulaşırım?',
+              'Tasarruf önerisi ver',
+              'Düzenli giderlerimi incele',
+            ],
+          );
+        }
       } else {
         _clearCachedContext();
-        _seedFallbackMessages();
+        if (emitGreetingMessage) {
+          _seedFallbackMessages();
+        }
       }
     } catch (e) {
       if (markInitialized) {
         _initError = e.toString();
       }
       _clearCachedContext();
-      if (_messages.isEmpty || isReset) {
+      if (emitGreetingMessage && (_messages.isEmpty || isReset)) {
         _seedFallbackMessages();
       }
     } finally {
@@ -208,7 +217,21 @@ class OracleViewModel extends ChangeNotifier {
   void clearChat() {
     _messages.clear();
     notifyListeners();
-    unawaited(_loadContextAndSeed(isReset: true, markInitialized: false));
+    unawaited(
+      _loadContextAndSeed(
+        isReset: true,
+        markInitialized: false,
+        emitGreetingMessage: true,
+      ),
+    );
+  }
+
+  Future<void> refreshContextSilently() {
+    return _loadContextAndSeed(
+      isReset: false,
+      markInitialized: false,
+      emitGreetingMessage: false,
+    );
   }
 
   // ─── Kriz Enjeksiyonu ────────────────────────────────────────────────────────

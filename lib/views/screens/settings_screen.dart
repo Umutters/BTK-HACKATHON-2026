@@ -5,7 +5,15 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../viewmodels/recurring_rules_viewmodel.dart';
+import '../../viewmodels/notifications_settings_viewmodel.dart';
+import '../../viewmodels/theme_settings_viewmodel.dart';
+import '../../viewmodels/ai_preferences_viewmodel.dart';
+import '../../viewmodels/data_management_viewmodel.dart';
 import 'recurring_rules_screen.dart';
+import 'notifications_settings_screen.dart';
+import 'theme_settings_screen.dart';
+import 'ai_preferences_screen.dart';
+import 'data_management_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -42,24 +50,60 @@ class SettingsScreen extends StatelessWidget {
             title: 'Bildirimler',
             subtitle: 'Harcama, görev ve AI önerileri için uyarılar',
             icon: Icons.notifications_active_rounded,
+            accentColor: AppColors.cyberMagenta,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ChangeNotifierProvider(
+                  create: (_) => NotificationsSettingsViewModel(),
+                  child: const NotificationsSettingsScreen(),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: AppDimensions.spaceL),
           _SettingsCard(
             title: 'Tema ve görünüm',
             subtitle: 'Neon / glass tasarım ayarlarını yönet',
             icon: Icons.palette_rounded,
+            accentColor: AppColors.neonLime,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ChangeNotifierProvider(
+                  create: (_) => ThemeSettingsViewModel(),
+                  child: const ThemeSettingsScreen(),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: AppDimensions.spaceL),
           _SettingsCard(
             title: 'AI tercihleri',
             subtitle: 'Gemini davranışı ve cevap yoğunluğunu ayarla',
             icon: Icons.auto_awesome_rounded,
+            accentColor: AppColors.cyberBlue,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ChangeNotifierProvider(
+                  create: (_) => AiPreferencesViewModel(),
+                  child: const AiPreferencesScreen(),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: AppDimensions.spaceL),
           _SettingsCard(
             title: 'Veri yönetimi',
             subtitle: 'Yerel kayıtları temizle, yedek al veya senkronize et',
             icon: Icons.storage_rounded,
+            accentColor: AppColors.cyberMagenta,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ChangeNotifierProvider(
+                  create: (_) => DataManagementViewModel(),
+                  child: const DataManagementScreen(),
+                ),
+              ),
+            ),
           ),
         ],
       ),

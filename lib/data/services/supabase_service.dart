@@ -120,7 +120,7 @@ class SupabaseService {
 
   Future<void> addToSavingsPool(String userId, double amount) async {
     // ESKI MANTIK KALDIRILAN - Birikim artık calculated field:
-    // savingsPool = initialBalance + SUM(daily_logs.transferred_to_savings)
+    // savingsPool = SUM(daily_logs.transferred_to_savings)
     // Crisis işlemleri daily_logs'ta negatif transfer olarak kaydedilir
     final today = DateTime.now().toIso8601String().substring(0, 10);
 
@@ -304,7 +304,7 @@ class SupabaseService {
     }
   }
 
-  /// İdeal birikim = initialBalance + SUM(daily_logs.transferred_to_savings)
+  /// Havuz toplamı = SUM(daily_logs.transferred_to_savings)
   Future<double> getSavingsTotal(String userId) async {
     final profile = await getProfile(userId);
     if (profile == null) return 0.0;
@@ -324,10 +324,10 @@ class SupabaseService {
           ) ??
           0;
 
-      return profile.initialBalance + transferred;
+      return transferred;
     } on PostgrestException {
       final legacyUserId = await _resolveLegacyUserId(userId);
-      if (legacyUserId == null) return profile.initialBalance;
+      if (legacyUserId == null) return 0.0;
 
       try {
         final data = await _client
@@ -344,9 +344,9 @@ class SupabaseService {
             ) ??
             0;
 
-        return profile.initialBalance + transferred;
+        return transferred;
       } on PostgrestException {
-        return profile.initialBalance;
+        return 0.0;
       }
     }
   }

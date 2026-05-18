@@ -414,14 +414,14 @@ class LocalDataSource {
     await saveProfile(updated);
   }
 
-  /// İdeal birikim = initialBalance + SUM(daily_logs.transferred_to_savings)
+  /// Havuz toplamı = SUM(daily_logs.transferred_to_savings)
   Future<double> getSavingsTotal() async {
     final profile = await getProfile();
     if (profile == null) return 0.0;
 
     final prefs = await _prefs;
     final json = prefs.getString(_dailyLogsKey);
-    if (json == null) return profile.initialBalance;
+    if (json == null) return 0.0;
 
     try {
       final rawList = jsonDecode(json) as List<dynamic>;
@@ -430,9 +430,9 @@ class LocalDataSource {
         (sum, row) =>
             sum + ((row['transferred_to_savings'] as num?)?.toDouble() ?? 0),
       );
-      return profile.initialBalance + transferred;
+      return transferred;
     } catch (e) {
-      return profile.initialBalance;
+      return 0.0;
     }
   }
 

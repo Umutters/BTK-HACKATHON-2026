@@ -67,18 +67,18 @@ class HomeRepository {
     double savingsPool = 0;
     List<CrisisEventModel> crisisEvents = const [];
 
+    try {
+      await _supabaseService.applyDueRules(userId);
+    } catch (_) {}
+
     final profile = await _supabaseService.getProfile(userId);
     if (profile != null) {
-      currentBalance = profile.currentBalance;
+      currentBalance = profile.currentBalance.clamp(0.0, double.maxFinite);
       savingsPool = await _supabaseService.getSavingsTotal(userId);
-    }
 
-    try {
-      final delta = await _supabaseService.applyDueRules(userId);
-      if (delta != 0) {
-        currentBalance = (currentBalance + delta).clamp(0.0, double.maxFinite);
-      }
-    } catch (_) {}
+      // Savings pool is a partition of total balance, so it cannot exceed balance.
+      savingsPool = savingsPool.clamp(0.0, currentBalance);
+    }
 
     try {
       crisisEvents = await _supabaseService.getCrisisEvents(userId);

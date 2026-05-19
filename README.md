@@ -1,5 +1,17 @@
 # ⏳ FortuneFlow AI - Finansal Oyunlaştırma & Zaman Makinesi Simülasyonu
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Developed%20For-BTK%20Hackathon%202026-blueviolet?style=for-the-badge&logo=github" alt="BTK Hackathon 2026" />
+</p>
+
+<p align="center">
+  <img src="screenshots/1.png" width="30%" alt="Dashboard" />
+  <img src="screenshots/2.png" width="30%" alt="Oracle Chat" />
+  <img src="screenshots/3.png" width="30%" alt="Zaman Makinesi Simülasyonu" />
+  <img src="screenshots/4.png" width="30%" alt="Zaman Makinesi Simülasyonu" />
+  <img src="screenshots/5.png" width="30%" alt="Zaman Makinesi Simülasyonu" />
+
+</p>
 
 
 FortuneFlow AI, geleneksel bütçe takip uygulamalarının ötesine geçerek davranışsal finansı oyunlaştırma prensipleri ve Açıklanabilir Yapay Zeka (XAI) ile birleştiren fütüristik bir finansal yönetim ve simülasyon platformudur. 

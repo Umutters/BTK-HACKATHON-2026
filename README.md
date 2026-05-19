@@ -14,9 +14,10 @@
 </p>
 
 
-FortuneFlow AI, geleneksel bütçe takip uygulamalarının ötesine geçerek davranışsal finansı oyunlaştırma prensipleri ve Açıklanabilir Yapay Zeka (XAI) ile birleştiren fütüristik bir finansal yönetim ve simülasyon platformudur. 
+FortuneFlow AI, geleneksel bütçe takip uygulamalarının ötesine geçerek davranışsal finansı oyunlaştırma prensipleri ve  Yapay Zeka ile birleştiren fütüristik bir finansal yönetim ve simülasyon platformudur. 
 
-Uygulama, kullanıcılara sadece "geçmişte ne harcadıklarını" söylemez; anlık kararlarının, birikim alışkanlıklarının ve beklenmedik krizlerin **20 yıl sonraki (2046 yılındaki)** finansal durumlarını nasıl şekillendireceğini canlı olarak deneyimletir.
+Uygulama, kullanıcılara sadece "geçmişte ne harcadıklarını" söylemez; anlık kararlarının, birikim alışkanlıklarının ve beklenmedik krizlerin 
+ileri zamandaki finansal durumlarını nasıl şekillendireceğini canlı olarak deneyimletir.
 
 ---
 
@@ -27,13 +28,13 @@ Kullanıcının `savings_pool` (Tasarruf Havuzu) verisini ve günlük harcama al
 * **Mevcut Rota (Current Path):** Geçmiş harcama alışkanlıkları aynen devam ederse varılacak nokta.
 * **Optimize Rota (Optimized Path):** İnteraktif slider'lar vasıtasıyla eklenen günlük tasarruflar ve Oracle önerileriyle ulaşılabilecek finansal zirve.
 
-### 🤖 2. AI Oracle Chat & XAI Katmanı
+### 🤖 2. AI Chatbot & AI Katmanı
 Gemini Flash API (`google_generative_ai`) ile entegre çalışan, `systemInstruction` mimarisiyle güçlendirilmiş finansal kahin. Sadece ham verileri değil, finansal kararların arkasındaki psikolojik ve mantıksal nedenleri  analiz eder, fütüristik metaforlarla kullanıcıya sunar.
 
 ### 🚨 3. Kullanıcı Girdili Kriz Olayları (Financial Shock Mechanism)
 Gerçek hayatın dinamizmini simüle eden oyunlaştırma tabanlı kriz yönetim mekanizması:
-* Kullanıcı anlık bir kriz girdiğinde (Örn: Araç arızası - 3000 TL), bakiye **anında düşer** ve sisteme bir finansal şok yansıtılır.
-* Oracle otomatik olarak tetiklenerek chat ekranında bu krizin 2046 hedeflerine olan faturasını hesaplar (Typewriter etkisiyle).
+* Kullanıcı anlık bir kriz girdiğinde (Örn: Araç arızası - 3000 TL), bakiye anında düşer ve sisteme bir finansal şok yansıtılır.
+* Oracle otomatik olarak tetiklenerek chat ekranında bu krizin  hedeflerine olan faturasını hesaplar .
 * Kullanıcıya krizi çözmesi için dinamik aksiyon butonları sunulur: **[Tasarruf Havuzundan Karşıla]** veya **[Kemerleri Sık (Bütçeden Kes - Yüksek Gelişim Ödülü)]**.
 
 ### 🏦 4. Otomatik Tasarruf & Oyunlaştırma (Gamification)

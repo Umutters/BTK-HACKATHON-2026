@@ -361,7 +361,7 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: context.width,
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
         AppDimensions.pagePaddingH,
         AppDimensions.spaceL,
@@ -372,8 +372,8 @@ class _BottomBar extends StatelessWidget {
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.glass08)),
       ),
-      child: Expanded(
-        flex: 2,
+      child: SizedBox(
+        width: double.infinity,
         child: ElevatedButton(
           onPressed: canProceed ? onProceed : null,
           style: ElevatedButton.styleFrom(
@@ -401,8 +401,4 @@ class _BottomBar extends StatelessWidget {
       ),
     );
   }
-}
-
-extension ContextExtension on BuildContext {
-  double get width => MediaQuery.of(this).size.width;
 }

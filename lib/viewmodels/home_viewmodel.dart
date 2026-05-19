@@ -189,14 +189,13 @@ class HomeViewModel extends ChangeNotifier {
 
       // XP güncelleme
       if (_user != null) {
-        final gainedXp = _user!.currentXp + quest.xpReward;
         var nextLevel = _user!.level;
-        var nextXp = gainedXp;
+        var nextXp = _user!.currentXp + quest.xpReward;
         var nextMaxXp = _user!.maxXp;
 
-        if (gainedXp >= _user!.maxXp) {
-          nextLevel = _user!.level + 1;
-          nextXp = 0;
+        while (nextXp >= nextMaxXp) {
+          nextXp -= nextMaxXp;
+          nextLevel += 1;
           nextMaxXp = nextLevel * 1000;
         }
 

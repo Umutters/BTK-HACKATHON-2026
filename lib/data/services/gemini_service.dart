@@ -363,7 +363,7 @@ KURAL: Yanıtta sadece bu kullanıcının TL rakamlarını kullan. Markdown yıl
         .fold(0.0, (s, t) => s + t.amount);
 
     final fullPrompt =
-        '''Sen kısa ve net Türkçe finans yorumu yapan bir asistansın. Yalnızca tek cümle yaz.
+        '''Sen Türkçe konuşan kişisel finans analistissin. Aşağıdaki verilere dayanarak kapsamlı bir simülasyon analizi yaz.
 
 Kullanıcı: ${profile.userName} | Bakiye: ${profile.currentBalance.toStringAsFixed(0)} TL | Günlük limit: ${profile.dailyLimit.toStringAsFixed(0)} TL
 Aylık gelir: ${income.toStringAsFixed(0)} TL | Aylık gider: ${expense.toStringAsFixed(0)} TL | Net surplus: ${monthlySurplus.toStringAsFixed(0)} TL
@@ -372,14 +372,14 @@ Hedef: $goalName — ${goalMillions.toStringAsFixed(1)}M TL | Tahmini ulaşma: $
 En etkili kalemler:
 $topDriverText
 
-Kural: 120 karakteri geçme. Somut TL rakamı kullan. Fırsat maliyeti, nakit akışı ve toparlanma hızından birini vurgula. Markdown kullanma.''';
+Kural: 3-5 cümle yaz. Her cümlede somut TL rakamı kullan. Sırayla şunları ele al: mevcut nakit akışının güçlü/zayıf yönü, en kritik harcama kaleminin uzun vadeli fırsat maliyeti, hedefe ulaşma tahmini ve hızlandırmak için en etkili 1 eylem. Markdown yıldız (*) kullanma.''';
 
     try {
       final text = await _generateTextWithFailover(
         prompt: fullPrompt,
         generationConfig: GenerationConfig(
           temperature: 0.6,
-          maxOutputTokens: 512,
+          maxOutputTokens: 1800,
           topP: 0.9,
         ),
       );
@@ -588,7 +588,11 @@ Görev:
     required double monthlySurplus,
   }) {
     final trend = monthlySurplus >= 0 ? 'pozitif' : 'negatif';
-    return '$goalName için trend $trend; bu rotada $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M TL görebilirsin ve aylık katkını 1000 TL artırman toparlanmayı belirgin hızlandırır.';
+    final surplusAbs = monthlySurplus.abs().toStringAsFixed(0);
+    final surplusNote = monthlySurplus >= 0
+        ? 'Aylık ${surplusAbs} TL pozitif nakit akışı sağlam bir birikim zemini oluşturuyor.'
+        : 'Aylık ${surplusAbs} TL negatif nakit akışı birikim hızını yavaşlatıyor; gider kalemlerini gözden geçirmek öncelik olmalı.';
+    return '$surplusNote $goalName hedefin için $goalYear civarında yaklaşık ${projectedMillions.toStringAsFixed(1)}M TL projeksiyon görünüyor. Bu rotada en yüksek etkili harcama kategorisini optimize etmek hedefe ulaşma tarihini 1-2 yıl öne çekebilir. Günlük limitine düzenli sadık kalmak ise bileşik getiri etkisiyle uzun vadede en güçlü kaldıraç olmaya devam edecek.';
   }
 
   SimulationAiRecommendation _fallbackSimulationRecommendation({

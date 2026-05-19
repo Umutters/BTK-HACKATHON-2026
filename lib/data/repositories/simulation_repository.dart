@@ -5,6 +5,7 @@ import '../models/crisis_event_model.dart';
 import '../models/daily_log_model.dart';
 import '../models/decision_log_model.dart';
 import '../models/profile_model.dart';
+import '../models/recurring_rule_model.dart';
 import '../models/recurring_transaction_model.dart';
 
 class SimulationGroundedSignals {
@@ -62,6 +63,17 @@ class SimulationRepository {
     } catch (_) {}
 
     return _localDataSource.getRecurringTransactions();
+  }
+
+  Future<List<RecurringRuleModel>> getRecurringRules() async {
+    if (!_canUseSupabase) return _localDataSource.getRecurringRules();
+
+    try {
+      final remote = await _supabaseDataSource.getRecurringRules();
+      if (remote.isNotEmpty) return remote;
+    } catch (_) {}
+
+    return _localDataSource.getRecurringRules();
   }
 
   Future<List<DailyLogModel>> getRecentLogs({int days = 30}) async {

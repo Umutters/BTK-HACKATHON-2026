@@ -6,6 +6,7 @@ import '../models/daily_log_model.dart';
 import '../models/decision_log_model.dart';
 import '../models/profile_model.dart';
 import '../models/projection_point.dart';
+import '../models/recurring_rule_model.dart';
 import '../models/recurring_transaction_model.dart';
 import '../models/simulation_series_point.dart';
 import '../models/transaction_impact.dart';
@@ -59,6 +60,7 @@ class FinancialSimulationEngine {
   SimulationComputationResult compute({
     required ProfileModel? profile,
     required List<RecurringTransactionModel> transactions,
+    required List<RecurringRuleModel> rules,
     required List<DailyLogModel> logs,
     required List<CrisisEventModel> crisisEvents,
     required List<DecisionLogModel> decisionLogs,
@@ -70,12 +72,37 @@ class FinancialSimulationEngine {
   }) {
     final sortedLogs = [...logs]..sort((a, b) => b.date.compareTo(a.date));
 
-    final monthlyIncome = transactions
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount);
-    final monthlyExpense = transactions
-        .where((t) => t.isExpense)
-        .fold<double>(0, (sum, t) => sum + t.amount);
+    double _ruleMonthly(RecurringRuleModel r) {
+      switch (r.frequency) {
+        case 'daily':
+          return r.amount * 30;
+        case 'weekly':
+          return r.amount * 4.33;
+        case 'yearly':
+          return r.amount / 12;
+        default:
+          return r.amount;
+      }
+    }
+
+    final activeRules = rules.where((r) => r.isActive).toList();
+    final ruleMonthlyIncome = activeRules
+        .where((r) => r.isIncome)
+        .fold<double>(0, (sum, r) => sum + _ruleMonthly(r));
+    final ruleMonthlyExpense = activeRules
+        .where((r) => r.isExpense)
+        .fold<double>(0, (sum, r) => sum + _ruleMonthly(r));
+
+    final monthlyIncome =
+        transactions
+            .where((t) => t.isIncome)
+            .fold<double>(0, (sum, t) => sum + t.amount) +
+        ruleMonthlyIncome;
+    final monthlyExpense =
+        transactions
+            .where((t) => t.isExpense)
+            .fold<double>(0, (sum, t) => sum + t.amount) +
+        ruleMonthlyExpense;
 
     final avgDailyTransferred30 = _averageDailyTransfer(sortedLogs);
     final avgDailyTransferred7 = _averageDailyTransfer(sortedLogs.take(7));
@@ -91,6 +118,7 @@ class FinancialSimulationEngine {
 
     final monthlySurplus = _estimateMonthlySurplus(
       transactions: transactions,
+      rules: rules,
       monthlySavingsTransfer: monthlySavingsTransfer,
     );
 
@@ -180,15 +208,38 @@ class FinancialSimulationEngine {
 
   double _estimateMonthlySurplus({
     required List<RecurringTransactionModel> transactions,
+    required List<RecurringRuleModel> rules,
     required double monthlySavingsTransfer,
   }) {
-    final recurringIncome = transactions
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount);
+    double _ruleMonthly(RecurringRuleModel r) {
+      switch (r.frequency) {
+        case 'daily':
+          return r.amount * 30;
+        case 'weekly':
+          return r.amount * 4.33;
+        case 'yearly':
+          return r.amount / 12;
+        default:
+          return r.amount;
+      }
+    }
 
-    final recurringExpense = transactions
-        .where((t) => t.isExpense)
-        .fold<double>(0, (sum, t) => sum + t.amount);
+    final activeRules = rules.where((r) => r.isActive).toList();
+    final recurringIncome =
+        transactions
+            .where((t) => t.isIncome)
+            .fold<double>(0, (sum, t) => sum + t.amount) +
+        activeRules
+            .where((r) => r.isIncome)
+            .fold<double>(0, (sum, r) => sum + _ruleMonthly(r));
+
+    final recurringExpense =
+        transactions
+            .where((t) => t.isExpense)
+            .fold<double>(0, (sum, t) => sum + t.amount) +
+        activeRules
+            .where((r) => r.isExpense)
+            .fold<double>(0, (sum, r) => sum + _ruleMonthly(r));
 
     return recurringIncome - recurringExpense - monthlySavingsTransfer;
   }

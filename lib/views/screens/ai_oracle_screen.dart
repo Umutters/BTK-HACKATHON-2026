@@ -241,38 +241,214 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppDimensions.spaceXXL),
-      child: Column(
+    return const Padding(
+      padding: EdgeInsets.only(bottom: AppDimensions.spaceL),
+      child: _FinancialSummaryCard(),
+    );
+  }
+}
+
+// ─── Financial Summary Card ───────────────────────────────────────────────────
+
+class _FinancialSummaryCard extends StatefulWidget {
+  const _FinancialSummaryCard();
+
+  @override
+  State<_FinancialSummaryCard> createState() => _FinancialSummaryCardState();
+}
+
+class _FinancialSummaryCardState extends State<_FinancialSummaryCard> {
+  String _formatMoney(double amount) {
+    final raw = amount.toStringAsFixed(0);
+    final grouped = raw.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]}.',
+    );
+    return '$grouped TL';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<OracleViewModel>(
+      builder: (context, vm, _) {
+        final balance = vm.currentBalance;
+        final pool = vm.savingsPool;
+        final income = vm.monthlyRuleIncome;
+        final expense = vm.monthlyRuleExpense;
+        final net = income - expense;
+
+        return Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                color: AppColors.cyberBlue10,
+                border: Border.all(color: AppColors.cyberBlue15),
+              ),
+              child: const Icon(
+                Icons.psychology_alt_rounded,
+                color: AppColors.cyberBlue,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spaceM),
+            Text(
+              'Kahin Analizi Hazır',
+              style: AppTextStyles.titleLarge.copyWith(
+                color: AppColors.onSurface,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spaceS),
+            Text(
+              'Gelir, gider ve tasarruf verilerinizi analiz ederek\nkişiselleştirilmiş finansal öneriler sunar.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+            if (vm.isInitialized && balance > 0) ...[
+              const SizedBox(height: AppDimensions.spaceL),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppDimensions.spaceL),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                  gradient: const LinearGradient(
+                    colors: [Color(0x221A1A1A), Color(0x1A00E5FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(color: AppColors.cyberBlue15),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _SummaryItem(
+                          icon: Icons.account_balance_wallet_rounded,
+                          label: 'BAKİYE',
+                          value: _formatMoney(balance),
+                          color: AppColors.cyberBlue,
+                        ),
+                        const SizedBox(width: AppDimensions.spaceM),
+                        _SummaryItem(
+                          icon: Icons.savings_rounded,
+                          label: 'HAVUZ',
+                          value: _formatMoney(pool),
+                          color: AppColors.neonLime,
+                        ),
+                      ],
+                    ),
+                    if (income > 0 || expense > 0) ...[
+                      const SizedBox(height: AppDimensions.spaceM),
+                      Container(height: 1, color: AppColors.glass12),
+                      const SizedBox(height: AppDimensions.spaceM),
+                      Row(
+                        children: [
+                          _SummaryItem(
+                            icon: Icons.trending_up_rounded,
+                            label: 'AYLIK GELİR',
+                            value: _formatMoney(income),
+                            color: AppColors.neonLime,
+                          ),
+                          const SizedBox(width: AppDimensions.spaceM),
+                          _SummaryItem(
+                            icon: Icons.trending_down_rounded,
+                            label: 'AYLIK GİDER',
+                            value: _formatMoney(expense),
+                            color: AppColors.cyberMagenta,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimensions.spaceS),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spaceM,
+                          vertical: AppDimensions.spaceXS,
+                        ),
+                        decoration: BoxDecoration(
+                          color: net >= 0
+                              ? AppColors.neonLime10
+                              : const Color(0x1AFF0080),
+                          borderRadius: BorderRadius.circular(
+                            AppDimensions.radiusFull,
+                          ),
+                          border: Border.all(
+                            color: net >= 0
+                                ? AppColors.neonLime30
+                                : AppColors.cyberMagenta,
+                          ),
+                        ),
+                        child: Text(
+                          'NET: ${net >= 0 ? '+' : ''}${_formatMoney(net)}',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: net >= 0
+                                ? AppColors.neonLime
+                                : AppColors.cyberMagenta,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: AppDimensions.spaceL),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SummaryItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SummaryItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-              color: AppColors.cyberBlue10,
-              border: Border.all(color: AppColors.cyberBlue15),
-            ),
-            child: const Icon(
-              Icons.psychology_alt_rounded,
-              color: AppColors.cyberBlue,
-              size: 36,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spaceM),
-          Text(
-            'Kahin Analizi Hazır',
-            style: AppTextStyles.titleLarge.copyWith(
-              color: AppColors.onSurface,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spaceS),
-          Text(
-            'Gelir, gider ve tasarruf verilerinizi analiz ederek\nkişiselleştirilmiş finansal öneriler sunar.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-              height: 1.5,
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: AppDimensions.spaceXS),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 9,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
         ],

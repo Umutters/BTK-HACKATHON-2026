@@ -12,6 +12,7 @@ import '../data/models/decision_log_model.dart';
 import '../data/models/profile_model.dart';
 import '../data/models/projection_point.dart';
 import '../data/models/projection_table_row.dart';
+import '../data/models/recurring_rule_model.dart';
 import '../data/models/recurring_transaction_model.dart';
 import '../data/models/simulation_series_point.dart';
 import '../data/models/transaction_impact.dart';
@@ -67,6 +68,7 @@ class SimulationViewModel extends ChangeNotifier {
 
   ProfileModel? _profile;
   List<RecurringTransactionModel> _transactions = const [];
+  List<RecurringRuleModel> _rules = const [];
   List<DailyLogModel> _logs = const [];
 
   SimulationViewModel({
@@ -260,6 +262,7 @@ class SimulationViewModel extends ChangeNotifier {
 
     _profile = await _simulationRepository.getUserProfile();
     _transactions = await _simulationRepository.getRecurringTransactions();
+    _rules = await _simulationRepository.getRecurringRules();
     _logs = await _simulationRepository.getRecentLogs(days: 30);
 
     final groundedSignals = await _simulationRepository.getGroundedSignals();
@@ -290,6 +293,7 @@ class SimulationViewModel extends ChangeNotifier {
     final computed = _simulationEngine.compute(
       profile: _profile,
       transactions: _transactions,
+      rules: _rules,
       logs: _logs,
       crisisEvents: _crisisEvents,
       decisionLogs: _decisionLogs,

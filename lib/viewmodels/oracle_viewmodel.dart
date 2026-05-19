@@ -69,6 +69,30 @@ class OracleViewModel extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   String? get initError => _initError;
 
+  double get currentBalance => _cachedProfile?.currentBalance ?? 0.0;
+  double get savingsPool => _cachedProfile?.savingsPool ?? 0.0;
+
+  double get monthlyRuleIncome => _cachedRules
+      .where((r) => r.isIncome && r.isActive)
+      .fold(0.0, (sum, r) => sum + _toMonthly(r));
+
+  double get monthlyRuleExpense => _cachedRules
+      .where((r) => r.isExpense && r.isActive)
+      .fold(0.0, (sum, r) => sum + _toMonthly(r));
+
+  static double _toMonthly(RecurringRuleModel r) {
+    switch (r.frequency) {
+      case 'daily':
+        return r.amount * 30;
+      case 'weekly':
+        return r.amount * 4.33;
+      case 'yearly':
+        return r.amount / 12;
+      default:
+        return r.amount;
+    }
+  }
+
   OracleViewModel({
     GeminiService? gemini,
     SupabaseDataSource? dataSource,

@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/1.png" width="30%" alt="Dashboard" />
-  <img src="screenshots/2.png" width="30%" alt="Oracle Chat" />
-  <img src="screenshots/3.png" width="30%" alt="Zaman Makinesi Simülasyonu" />
-  <img src="screenshots/4.png" width="30%" alt="Zaman Makinesi Simülasyonu" />
-  <img src="screenshots/5.png" width="30%" alt="Zaman Makinesi Simülasyonu" />
+  <img src="screenshots/1.jpeg" width="30%" alt="Dashboard" />
+  <img src="screenshots/2.jpeg" width="30%" alt="Oracle Chat" />
+  <img src="screenshots/3.jpeg" width="30%" alt="Zaman Makinesi Simülasyonu" />
+  <img src="screenshots/4.jpeg" width="30%" alt="Zaman Makinesi Simülasyonu" />
+  <img src="screenshots/5.jpeg" width="30%" alt="Zaman Makinesi Simülasyonu" />
 
 </p>
 
